@@ -1,0 +1,77 @@
+name: release-ci
+on:
+  push:
+    branches:
+      - release_to_dev  # Prevents direct push from triggering the workflow
+  pull_request:
+    branches:
+      - release_to_dev # Trigger only if the PR is merged into this branch
+
+
+jobs:
+  build-and-test-erp_backend:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Docker Image
+        run: |
+          docker build -t erp_backend:${{ github.run_number }} .
+
+      - name: Trivy Scan
+        run: |
+          trivy image --severity HIGH,CRITICAL erp_backend:${{ github.run_number }}
+
+      - name: Run Tests and Generate Coverage Report
+        run: |
+          docker run --rm \
+            -v $(pwd):/code \
+            -e KAFKA_URL=${{ vars.KAFKA_URL }} \
+            -e ELASTIC_SEARCH_URL=${{ vars.ELASTIC_SEARCH_URL }} \
+            -e SOCKET_API_URL=${{ vars.SOCKET_API_URL }} \
+            -e MINIO_URL=${{ vars.MINIO_URL }} \
+            -e MINIO_ACCESS_KEY=${{ vars.MINIO_ACCESS_KEY }} \
+            -e MINIO_SECRET_KEY=${{ vars.MINIO_SECRET_KEY }} \
+            -e DB_NAME=${{ vars.DB_NAME }} \
+            -e DB_USER=${{ vars.DB_USER }} \
+            -e DB_PASSWORD=${{ vars.DB_PASSWORD }} \
+            -e DB_HOST=${{ vars.DB_HOST }} \
+            -e DB_PORT=${{ vars.DB_PORT }} \
+            -e EMAIL_PASSWORD=${{ vars.EMAIL_PASSWORD }} \
+            -e SECRET_KEY=${{ vars.SECRET_KEY }} \
+            -e DEBUG=${{ vars.DEBUG }} \
+            -e ENVIRONMENT=${{ vars.ENVIRONMENT }} \
+            erp_backend:${{ github.run_number }} \
+            /bin/sh -c "set +e; echo y | python manage.py search_index --rebuild; echo yes | coverage run --source='.' manage.py test; coverage report; coverage xml -o coverage.xml; set -e; chmod a+w coverage.xml;"
+
+      - name:  Cleaning unused docker images
+        run: |
+          echo y | docker system prune -f
+
+  merge-pr:
+    needs: build-and-test-erp_backend
+    runs-on: self-hosted
+
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Squash and Merge PR
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          curl -L -X PUT \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/$REPO/pulls/$PR_NUMBER/merge \
+            -d '{
+              "commit_title": " Merge PR #'"$PR_NUMBER"'",
+              "commit_message": "This pull request has been merged automatically.",
+              "merge_method": "merge"
+            }'

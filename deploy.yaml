@@ -1,0 +1,36 @@
+version: "3.9"
+services:
+  biller:
+    image: erp_backend:#tag#
+    deploy:
+      replicas: 1
+    networks:
+      - es-net      
+    ports:
+      - "8000:8000"
+
+    environment:
+      - KAFKA_URL=${KAFKA_URL}
+      - ELASTIC_SEARCH_URL=${ELASTIC_SEARCH_URL}
+      - SOCKET_API_URL=${SOCKET_API_URL}
+      - MINIO_URL=${MINIO_URL}
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - EMAIL_PASSWORD=${EMAIL_PASSWORD}
+      - SECRET_KEY=${SECRET_KEY}
+      - DEBUG=${DEBUG}
+      - ENVIRONMENT=${ENVIRONMENT}
+    command: >
+      /bin/sh -c "        
+        echo 'Starting Django server...';
+        python manage.py runserver 0.0.0.0:8000
+      "
+
+networks:
+  es-net:
+    external: true

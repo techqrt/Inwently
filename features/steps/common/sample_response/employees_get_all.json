@@ -1,0 +1,64 @@
+{
+  "status": true,
+  "message": "string",
+  "data": {
+    "presentPage": 0,
+    "totalPage": 0,
+    "totalCount": 0,
+    "data": [
+      {
+        "name": "string",
+        "mobileNumber": "string",
+        "dob": "2024-10-02",
+        "state": "string",
+        "country": "string",
+        "street": "string",
+        "organisationName": "string",
+        "isActive": true,
+        "emailId": "user@example.com",
+        "emailVerified": true,
+        "profile_photo_url": "string",
+        "employeeCode": "string",
+        "permissions": {
+          "master": {
+            "item": true,
+            "shop": true,
+            "supplier": true,
+            "customer": true,
+            "create": true,
+            "employee": true
+          },
+          "inventory": {
+            "inventory": true
+          },
+          "billing": {
+            "bill_history": true,
+            "pos": true,
+            "return_item": true
+          },
+          "reports": {
+            "overview": true,
+            "general": true,
+            "administration": true,
+            "day_book": true,
+            "gst": true
+          },
+          "printer_templates": {
+            "printer_templates": true
+          },
+          "dashboard": {
+            "dashboard": true
+          },
+          "stock": {
+            "stock": true,
+            "purchase_list": true,
+            "return_purchase": true
+          },
+          "quotations": {
+            "quotations": true
+          }
+        }
+      }
+    ]
+  }
+}

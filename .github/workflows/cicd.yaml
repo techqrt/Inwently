@@ -1,0 +1,91 @@
+name: ERP_BACKEND Pipeline
+
+on:
+  workflow_run:
+    workflows: [ "release-ci" ] # Name of the first workflow
+    types:
+      - completed # Trigger when the first workflow completes
+
+
+jobs:
+  build-and-deploy-erp_backend:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }} # Run only if the PR was merged
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Docker Image
+        run: |
+          docker build -t erp_backend:${{ github.run_number }} .
+
+      - name: Trivy Scan
+        run: |
+          trivy image --severity HIGH,CRITICAL erp_backend:${{ github.run_number }}
+
+      - name: Run Tests and Generate Coverage Report
+        run: |
+          docker run --rm \
+            -v $(pwd):/code \
+            -e KAFKA_URL=${{ vars.KAFKA_URL }} \
+            -e ELASTIC_SEARCH_URL=${{ vars.ELASTIC_SEARCH_URL }} \
+            -e SOCKET_API_URL=${{ vars.SOCKET_API_URL }} \
+            -e MINIO_URL=${{ vars.MINIO_URL }} \
+            -e MINIO_ACCESS_KEY=${{ vars.MINIO_ACCESS_KEY }} \
+            -e MINIO_SECRET_KEY=${{ vars.MINIO_SECRET_KEY }} \
+            -e DB_NAME=${{ vars.DB_NAME }} \
+            -e DB_USER=${{ vars.DB_USER }} \
+            -e DB_PASSWORD=${{ vars.DB_PASSWORD }} \
+            -e DB_HOST=${{ vars.DB_HOST }} \
+            -e DB_PORT=${{ vars.DB_PORT }} \
+            -e EMAIL_PASSWORD=${{ vars.EMAIL_PASSWORD }} \
+            -e SECRET_KEY=${{ vars.SECRET_KEY }} \
+            -e DEBUG=${{ vars.DEBUG }} \
+            -e ENVIRONMENT=${{ vars.ENVIRONMENT}} \
+            erp_backend:${{ github.run_number }} \
+            /bin/sh -c "set +e; echo y | python manage.py search_index --rebuild; echo yes | coverage run --source='.' manage.py test; coverage report; coverage xml -o coverage.xml; set -e; chmod a+w coverage.xml;"
+
+      - name: Replace Environment Variables in Deployment YAML
+        run: |
+          sed -i "s|\${KAFKA_URL}|${{ vars.KAFKA_URL }}|g" deploy.yaml
+          sed -i "s|\${ELASTIC_SEARCH_URL}|${{ vars.ELASTIC_SEARCH_URL }}|g" deploy.yaml
+          sed -i "s|\${SOCKET_API_URL}|${{ vars.SOCKET_API_URL }}|g" deploy.yaml
+          sed -i "s|\${MINIO_URL}|${{ vars.MINIO_URL }}|g" deploy.yaml
+          sed -i "s|\${MINIO_ACCESS_KEY}|${{ vars.MINIO_ACCESS_KEY }}|g" deploy.yaml
+          sed -i "s|\${MINIO_SECRET_KEY}|${{ vars.MINIO_SECRET_KEY }}|g" deploy.yaml
+          sed -i "s|\${DB_NAME}|${{ vars.DB_NAME }}|g" deploy.yaml
+          sed -i "s|\${DB_USER}|${{ vars.DB_USER }}|g" deploy.yaml
+          sed -i "s|\${DB_PASSWORD}|${{ vars.DB_PASSWORD }}|g" deploy.yaml
+          sed -i "s|\${DB_HOST}|${{ vars.DB_HOST }}|g" deploy.yaml
+          sed -i "s|\${DB_PORT}|${{ vars.DB_PORT }}|g" deploy.yaml
+          sed -i "s|\${EMAIL_PASSWORD}|${{ vars.EMAIL_PASSWORD }}|g" deploy.yaml
+          sed -i "s|\${SECRET_KEY}|${{ vars.SECRET_KEY }}|g" deploy.yaml
+          sed -i "s|\${DEBUG}|${{ vars.DEBUG }}|g" deploy.yaml
+          sed -i "s|\${ENVIRONMENT}|${{ vars.ENVIRONMENT }}|g" deploy.yaml
+          sed -i "s|#tag#|${{ github.run_number }}|g" deploy.yaml         
+
+      - name: Deploy with Docker Stack
+        run: |
+          docker stack deploy -c deploy.yaml erp_backend --detach=false
+
+      - name: Upload Coverage Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml
+
+
+      - name: Verify Coverage File Location
+        run: |
+          ls -la
+
+      - uses: sonarsource/sonarqube-scan-action@v3
+        env:
+          SONAR_TOKEN: ${{ vars.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+        with:
+          args: "-Dsonar.python.coverage.reportPaths=coverage.xml"
+
+
+

@@ -1,0 +1,75 @@
+version: "3.9"
+
+services:
+  backendbdd:
+    build: .
+    environment:
+      - KAFKA_URL=kafka:29092
+      - ELASTIC_SEARCH_URL=http://elasticsearchbdd:9200
+      - SOCKET_API_URL=http://localhost
+      - MINIO_URL=http://miniobdd:9000
+      - MINIO_ACCESS_KEY=admin
+      - MINIO_SECRET_KEY=admin123
+      - DB_NAME=biller
+      - DB_USER=admin
+      - DB_PASSWORD=123456789
+      - DB_HOST=postgresbdd
+      - DB_PORT=5432
+      - EMAIL_PASSWORD=mhyhencdeicnomfp
+      - SECRET_KEY=django-insecure-xlw1)lwutvir#=7p-zco0^8=yu(%0oxr@xp1@ei5d8@wye=5c
+      - DEBUG=True
+      - ENVIRONMENT=LOCAL
+    networks:
+      - sharednet
+
+    depends_on:
+      - elasticsearchbdd
+      - miniobdd
+      - postgresbdd
+    ports:
+      - "8800:8000"
+    command: >
+      /bin/sh -c "
+        while ! curl -s http://elasticsearchbdd:9200 > /dev/null; do
+          echo 'Waiting for Elasticsearch...';
+          sleep 5;
+        done;        
+        echo 'Running migrations...';
+        python manage.py migrate;
+        echo 'Starting Django server...';
+        python manage.py runserver 0.0.0.0:8000
+      "
+
+  elasticsearchbdd:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.14.0
+    environment:
+      - xpack.security.enabled=false
+      - "discovery.type=single-node"
+    networks:
+      - sharednet
+
+  miniobdd:
+    image: quay.io/minio/minio
+    environment:
+      - MINIO_ROOT_USER=admin
+      - MINIO_ROOT_PASSWORD=admin123
+    command: server /data --console-address ":9090"
+    networks:
+      - sharednet
+
+  postgresbdd:
+    image: postgres:16
+    restart: always
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: 123456789
+      POSTGRES_DB: biller
+    ports:
+      - "5433:5432"
+    networks:
+      - sharednet
+
+
+networks:
+  sharednet:
+    external: true
