@@ -20,7 +20,7 @@ class EmployeesGetDataSerializer(serializers.Serializer):
     isActive = serializers.BooleanField()
     emailId = serializers.EmailField()
     emailVerified = serializers.BooleanField()
-    profilePhotoUrl = serializers.CharField(required=False, allow_blank=True)
+    profilePhotoUrl = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     employeeCode = serializers.CharField()
     permissions = PermissionsSerializer()
 

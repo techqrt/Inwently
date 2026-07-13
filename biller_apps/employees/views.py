@@ -245,9 +245,9 @@ class EmployeesView:
     def get_extract(self, params: EmployeeGet, token_payload: Payload):
         employee_data = Employees.get(employee_code=params.employee_code,
                                       organisation_name=token_payload.organisationName)
-        employee_data['shop_access'] = str(AuthUtils.get_shop_list_for_user(shop_ids=employee_data['shop_access']))
         if employee_data is None:
             raise ValueError(self.data_no_match)
+        employee_data['shop_access'] = str(AuthUtils.get_shop_list_for_user(shop_ids=employee_data['shop_access']))
         employee_utils = EmployeeUtils(columns_required=params.values_list)
         employee_data = [employee_data]
         data = json.loads(employee_utils.mapper(data=employee_data))[0]

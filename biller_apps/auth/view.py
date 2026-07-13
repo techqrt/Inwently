@@ -155,6 +155,7 @@ class AuthView:
 
         payload['access_token'] = access_token
         payload['refresh_token'] = refresh_token
+        payload['employee_code'] = user_data['employee_code']
         Employees.update_tokens(employee_id=user_data['employee_id'], access_token=access_token,
                                 refresh_token=refresh_token, token_key=token_key)
 
