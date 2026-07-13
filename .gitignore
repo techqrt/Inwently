@@ -1,4 +1,6 @@
 *__pycache__*
+venv/
+venv
 .vscode
 .pyc
 biller/__pycache__
@@ -16,7 +18,6 @@ debug.log
 /logs/
 /django_logs/
 /data/
-env/
 /airflow/logs/
 .idea
 minio_vol
@@ -27,4 +28,3 @@ coverage.xml
 error.log
 info.log
 warning.log
-env/

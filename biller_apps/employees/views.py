@@ -19,8 +19,6 @@ from biller_apps.auth.view import AuthView
 from biller_apps.common.common import Common
 from biller_apps.common.dataclasses.get_all import GetAll
 from biller_apps.common.dataclasses.search import Search
-from biller_apps.common.email import EmailService
-from biller_apps.common.email_template import EmailTemplate
 from biller_apps.common.exceptions.validation_errors import ValidationErrors
 from biller_apps.common.models.adress import Address
 from biller_apps.common.publish import Publish
@@ -88,8 +86,8 @@ class EmployeesView:
 
     @Common().exception_handler
     @Publish.status_update
-    def create_extract(self, params: EmployeesRequest, token_payload: Payload,host:str):
-        passw =  str(uuid.uuid4())
+    def create_extract(self, params: EmployeesRequest, token_payload: Payload,host:str, password: str = None):
+        passw = password if password else str(uuid.uuid4())
         self.check_constrains(params=params, token_payload=token_payload)
 
         with transaction.atomic():
@@ -157,13 +155,11 @@ class EmployeesView:
                                quotations_permission_id=quotations_permission_id,
                                purchase_permission_id=purchase_permission_id,
                                reports_permission_id=reports_permission_id,
-                               printer_templates_permission_id=printer_templates_permission_id)
+                               printer_templates_permission_id=printer_templates_permission_id,
+                               is_active=True)
 
-        email_temp = EmailTemplate()
-        email_temp.set_welcome_email(name=params.name, password=passw, activation_link=host,employee_id=Employees.get_with_email(email_id=params.email_id)['employee_code'])
-        EmailService(subject=email_temp.subject, body=email_temp.body, to=[params.email_id]).send_email()
-
-        return Response(status=status.HTTP_201_CREATED, data=Utils.success_response_data(message=self.data_create))
+        return Response(status=status.HTTP_201_CREATED, data=Utils.success_response_data(
+            message=self.data_create, data={'email_id': params.email_id, 'password': passw}))
 
     @Common().exception_handler
     @Publish.status_update

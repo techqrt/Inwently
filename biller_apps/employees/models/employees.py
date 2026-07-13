@@ -245,10 +245,6 @@ class Employees(models.Model):
     def get_by_refresh_token(refresh_token: str) -> dict:
         return Employees.objects.filter(refresh_token=refresh_token).values('token_key', 'employee_id').first()
     @staticmethod
-    def get_for_register(email_id: str,otp: int) -> dict:
-        return Employees.objects.filter(employee_credentials_id__email_id=email_id,otp=otp,otp_expiry__gte=datetime.datetime.now(datetime.timezone.utc)).values().first()
-
-    @staticmethod
     def get_by_id_except_one(employee_id:int,email_id:str):
         return Employees.objects.filter(~Q(employee_id=employee_id)&Q(employee_credentials_id__email_id=email_id)).values('employee_credentials_id').first()
 

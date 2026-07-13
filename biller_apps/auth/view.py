@@ -163,14 +163,28 @@ class AuthView:
 
     @Common().exception_handler
     def register_extract(self, request, params: RegisterRequest):
-        employee_data = Employees.get_for_register(email_id=params.email_id,otp=params.email_otp)
-        if employee_data is None:
-            raise ValidationErrors(errors=[self.not_active])
-        with transaction.atomic():
-            Employees.update_activation(employee_id=employee_data['employee_id'], is_active=True, email_verified=True)
-            EmployeeCredentials.update(new_password=params.password,
-                                   employee_credentials_id=employee_data['employee_credentials_id_id'])
-        return Response(status=status.HTTP_200_OK, data=Utils.success_response_data(message=self.activate_successfully))
+        from biller_apps.employees.dataclasses.request.create import EmployeesRequest
+        from biller_apps.employees.views import EmployeesView
+        from biller_apps.organisation.models import Organisation
+
+        organisation_data = Organisation.get(company_name=params.organisation_name, single=True)
+        if not organisation_data:
+            raise ValidationErrors(errors=[self.user_not_found])
+
+        employees_request = EmployeesRequest(
+            name=params.name, mobile_number=params.mobile_number,
+            alternate_mobile_number=params.alternate_mobile_number, dob=params.dob,
+            shop_access=params.shop_access, email_id=params.email_id, state=params.state,
+            country=params.country, street=params.street, profile_photo_url=params.profile_photo_url,
+            permissions=params.permissions)
+
+        organisation_payload = Payload(
+            email_id=params.email_id, expiry='', organisationName=params.organisation_name,
+            organisation_id=organisation_data['organisation_id'], present_url='', access_token='',
+            method='', path='', approval=False, permissions=params.permissions)
+
+        return EmployeesView().create_extract(params=employees_request, token_payload=organisation_payload,
+                                              host=request.get_host(), password=params.password)
 
     @Common().exception_handler
     def password_change_extract(self, params: PasswordChange, token_payload: Payload):
