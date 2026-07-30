@@ -14,7 +14,7 @@ class Supplier(models.Model):
     address_id = models.ForeignKey(Address, on_delete=models.DO_NOTHING)
     organisation_id = models.ForeignKey(Organisation, on_delete=models.CASCADE)
     created_date_time = models.DateTimeField(default=timezone.now)
-    is_active = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
     is_active_change_time = models.DateTimeField(default=timezone.now)
     mobile_number = models.CharField(max_length=20, default='', unique=True)
     alt_mobile_number = models.CharField(max_length=20, default='', null=True)
@@ -37,7 +37,7 @@ class Supplier(models.Model):
         self.address_id = Address(address_id)
         self.organisation_id = Organisation(organisation_id)
         self.created_date_time = timezone.now()
-        self.is_active = False
+        self.is_active = True
         self.is_active_change_time = timezone.now()
         self.mobile_number = mobile_number
         self.email_id = email_id
@@ -95,8 +95,8 @@ class Supplier(models.Model):
     def get_all(organisation_name: str,params:GetAll)->list:
         filters=Q(organisation_id__company_name=organisation_name)
         if params.filter_key and params.filter_value:
-            if params.filter_key == 'is_active':
-                filters &= Q(**{params.filter_key: params.filter_value.lower() == 'true'})
+            if params.filter_key.lower() == 'is_active':
+                filters &= Q(is_active=params.filter_value.lower() == 'true'        )
             else:
                 filters &= Q(**{params.filter_key: params.filter_value})
         if len(params.search_key) > 0:

@@ -23,7 +23,7 @@ class ReturnPurchase(models.Model):
     tax = models.FloatField(default=0)
     total_price = models.FloatField(default=0)
     created_date_time = models.DateTimeField(default=timezone.now)
-
+    is_active = models.BooleanField(default=True)
     class Meta:
         db_table = 'return_purchase'
 
@@ -56,12 +56,12 @@ class ReturnPurchase(models.Model):
         filters=Q(organisation_id__company_name=organisation_name)
 
         if params.filter_key and params.filter_value:
-            if params.filter_value=='is_active':
-                filters&=Q(**{params.filter_key:params.filter_value.lower()=='true'})
+            if params.filter_key.lower() == 'is_active':
+                filters &= Q(is_active=params.filter_value.lower() == 'true')
             else:
-                filters&=Q(**{params.filter_key:params.filter_value})
-        if len(params.search_key)>0:
-            filters&=Q(return_code__icontains=params.search_key)
+                filters &= Q(**{params.filter_key: params.filter_value})
+        if len(params.search_key) > 0:
+            filters &= Q(return_code__icontains=params.search_key)
         if params.sort_by == 'name':
             params.sort_by = "created_date_time"
             params.sort_order = 'asc'

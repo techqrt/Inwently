@@ -21,6 +21,7 @@ class StockTransfer(models.Model):
     remarks = models.TextField(default='', null=True, blank=True)
     requested_by = models.CharField(max_length=100, default='', null=True, blank=True)
     approved_by = models.CharField(max_length=100, default='', null=True, blank=True)
+    is_active = models.BooleanField(default=True)
 
     class Meta:
         db_table = 'stock_transfer'
@@ -94,8 +95,8 @@ class StockTransfer(models.Model):
         filters=Q(organisation_id__company_name=organisation_name)
         
         if params.filter_value and params.filter_key:
-            if params.filter_value=='is_active':
-                filters=filters & Q(**{params.filter_key:params.filter_value.lower()=='true'})
+            if params.filter_key.lower() =='is_active':
+                filters=filters & Q(is_active=params.filter_value.lower()=='true')
             else:
                 filters=filters & Q(**{params.filter_key:params.filter_value})
             

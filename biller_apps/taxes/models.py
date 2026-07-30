@@ -15,7 +15,7 @@ class Taxes(models.Model):
     total_tax = models.FloatField(default=0.0)
     tax_splits = models.JSONField(default=dict)
     secure = models.BooleanField(default=False)
-
+    is_active = models.BooleanField(default=True)
     class Meta:
         db_table = 'taxes'
 
@@ -39,8 +39,8 @@ class Taxes(models.Model):
     def get_all(organisation_name: str,params:GetAll) -> list:
         filters= Q(organisation_id__company_name=organisation_name)
         if params.filter_key and params.filter_value:
-            if params.filter_value=='is_active':
-                filters &= Q(**{params.filter_key:params.filter_value.lower()=='true'})
+            if params.filter_key.lower() == 'is_active':
+                filters &= Q(is_active=params.filter_value.lower() == 'true')
             else:
                 filters &= Q(**{params.filter_key:params.filter_value})
         if len(params.search_key)>0:

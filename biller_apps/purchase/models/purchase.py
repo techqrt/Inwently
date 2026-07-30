@@ -24,7 +24,7 @@ class Purchase(models.Model):
     quantity = models.FloatField(default=0)
     quantity_unit = models.CharField(max_length=10, default='Kg')
     expiry = models.DateTimeField(default=timezone.now())
-
+    is_active = models.BooleanField(default=True)   
 
     class Meta:
         db_table = 'purchase'
@@ -55,12 +55,12 @@ class Purchase(models.Model):
         filters=Q(purchase_bill__organisation_id__company_name=organisation_name)
 
         if params.filter_value and params.filter_key:
-            if params.filter_value=='is_active':
-                filters=filters & Q(**{params.filter_key:params.filter_value.lower()=='true'})
+            if params.filter_key.lower() == 'is_active':
+                filters &= Q(is_active=params.filter_value.lower() == 'true')
             else:
-                filters=filters & Q(**{params.filter_key:params.filter_value})
+                filters &= Q(**{params.filter_key: params.filter_value})
 
-            if len(params.search_key)>0:
+            if len(params.search_key) > 0:
                 filters=filters & (Q(purchase_bill__purchase_bill_number__icontains=params.search_key)|Q(purchase_bill__supplier__name__icontains=params.search_key))
         if params.sort_by == 'name':
             params.sort_by = "purchase_bill_number"

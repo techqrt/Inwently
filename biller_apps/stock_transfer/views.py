@@ -71,9 +71,11 @@ class StockTransferView:
     def get_pending_transfers(self, params: GetAll, token_payload: Payload):
         transfers = StockTransfer.get_pending_transfers(organisation_name=token_payload.organisationName)
 
-        if params.filter_key and params.filter_value:
-            filter_condition = {params.filter_key: params.filter_value}
-            transfers = transfers.filter(**filter_condition)
+        if params.filter_key.lower() == 'is_active':
+            filter_value = params.filter_value.lower() == 'true'
+        else:
+            filter_value = params.filter_value
+        transfers = transfers.filter(**{params.filter_key: filter_value})
 
         if params.sort_by == 'name':
             params.sort_by = 'requested_by'
@@ -113,9 +115,11 @@ class StockTransferView:
         transfers = StockTransfer.get_completed_transfers(organisation_name=token_payload.organisationName)
 
 
-        if params.filter_key and params.filter_value:
-            filter_condition = {params.filter_key: params.filter_value}
-            transfers = transfers.filter(**filter_condition)
+        if params.filter_key.lower() == 'is_active':
+            filter_value = params.filter_value.lower() == 'true'
+        else:
+            filter_value = params.filter_value
+        transfers = transfers.filter(**{params.filter_key: filter_value})
 
         if params.sort_by == 'name':
             params.sort_by = 'requested_by'
@@ -153,9 +157,11 @@ class StockTransferView:
     def get_rejected_transfers(self, params: GetAll, token_payload: Payload):
         transfers = StockTransfer.get_rejected_transfers(organisation_name=token_payload.organisationName)
 
-        if params.filter_key and params.filter_value:
-            filter_condition = {params.filter_key: params.filter_value}
-            transfers = transfers.filter(**filter_condition)
+        if params.filter_key.lower() == 'is_active':
+            filter_value = params.filter_value.lower() == 'true'
+        else:
+            filter_value = params.filter_value
+        transfers = transfers.filter(**{params.filter_key: filter_value})
 
         if params.sort_by == 'name':
             params.sort_by = 'requested_by'

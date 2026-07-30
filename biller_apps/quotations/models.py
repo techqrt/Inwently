@@ -23,6 +23,7 @@ class Quotation(models.Model):
     total = models.FloatField(default=0)
     purchase = models.BooleanField(default=False)
     sales = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
 
     class Meta:
         db_table = 'quotation'
@@ -60,12 +61,12 @@ class Quotation(models.Model):
     def get_all(organisation_name: str,params:GetAll) -> list:
         filters= Q(organisation_id__company_name=organisation_name)
         if params.filter_key and params.filter_value:
-            if params.filter_value=='is_active':
-                filters=filters & Q(**{params.filter_key:params.filter_value.lower()=='true'})
+            if params.filter_key.lower() == 'is_active':
+                filters &= Q(is_active=params.filter_value.lower() == 'true')
             else:
-                filters=filters & Q(**{params.filter_key:params.filter_value})
-        if len(params.search_key)>0:
-            filters=filters & Q(quotation_code__icontains=params.search_key)
+                filters &= Q(**{params.filter_key: params.filter_value})
+        if len(params.search_key) > 0:
+            filters &= Q(quotation_code__icontains=params.search_key)
         if params.sort_by == 'name':
             params.sort_by = "created_date"
             params.ordering = f"{'-' if params.sort_order == 'desc' else ''}{params.sort_by}"

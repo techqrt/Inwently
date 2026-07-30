@@ -71,12 +71,12 @@ class Shops(models.Model):
     def get_all(organisation_name: str, type: str,params:GetAll) -> list:
         filter_criteria = Q(organisation_id_id__company_name=organisation_name)
         if params.filter_key and params.filter_value:
-            if params.filter_value=='is_active':
-                filter_criteria &= Q(**{params.filter_value:params.filter_value.lower()=='true'})
+            if params.filter_key.lower() == 'is_active':
+                filter_criteria &= Q(is_active=params.filter_value.lower() == 'true')
             else:
-                filter_criteria &= Q(**{params.filter_key:params.filter_value})
+                filter_criteria &= Q(**{params.filter_key: params.filter_value})
         if len(params.search_key) > 0:
-            filter_criteria &= Q(name__icontains=params.search_keys)
+            filter_criteria &= Q(name__icontains=params.search_key)
         if type == 'branch':
             filter_criteria &= Q(type='branch')
         elif type == 'warehouse':
