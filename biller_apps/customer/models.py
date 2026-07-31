@@ -80,8 +80,8 @@ class Customer(models.Model):
         filters= Q(organisation_id__company_name=organisation_name)
 
         if params.filter_key and params.filter_value:
-            if params.filter_value=='is_active':
-                filters=filters & Q(**{params.filter_key:params.filter_value.lower()=='true'})
+            if params.filter_key.lower()=='is_active':
+                filters=filters & Q(is_active=params.filter_value.lower()=='true')
             else:
                 filters=filters & Q(**{params.filter_key:params.filter_value})
                 

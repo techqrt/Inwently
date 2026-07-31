@@ -8,7 +8,7 @@ from rest_framework.response import Response
 
 from biller_apps.auth.dataclasses.request.token_payload import Payload
 from biller_apps.common.common import Common
-from biller_apps.common.minio import MinioConfig
+# biller_apps.common.minio import MinioConfig
 from biller_apps.common.publish import Publish
 from biller_apps.common.utils import Utils
 from biller_apps.storage.dataclasses.request.create import CreateGet
@@ -16,7 +16,7 @@ from biller_apps.storage.dataclasses.request.get import StorageGet
 from biller_apps.storage.dataclasses.request.upload import UploadGet
 from biller_apps.storage.models import Storage
 from biller_apps.storage.serializers.request.delete import DeleteGet
-
+from biller_apps.common.local_storage import LocalStorage
 
 class StorageView:
     def __init__(self) -> None:
@@ -46,10 +46,10 @@ class StorageView:
     def upload_extract(self, params: UploadGet, token_payload: Payload):
         file_status = self.decode_base64_to_file(encoded_string=params.files, output_file_path=params.file_name)
         try:
-            MinioConfig().create_bucket(bucket_name=params.bucket_name)
+            LocalStorage().create_bucket(bucket_name=params.bucket_name)
         except Exception:
             pass
-        MinioConfig().upload_file(bucket_name=params.bucket_name, file_name=params.file_name,
+            LocalStorage().upload_file(bucket_name=params.bucket_name, file_name=params.file_name,
                                   file_obj=params.file_name)
         base_url = token_payload.present_url.replace('http', 'https').replace('/storage/upload/',
                                                                               '/storage/get/?bucket_name=')
@@ -64,20 +64,20 @@ class StorageView:
     @Common().exception_handler
     @Publish.status_update
     def create_extract(self, params: CreateGet):
-        MinioConfig().create_bucket(bucket_name=params.bucket_name)
+        LocalStorage().create_bucket(bucket_name=params.bucket_name)
         return Response(status=status.HTTP_200_OK, data=Utils.success_response_data(message=self.created_data))
 
     @Common().exception_handler
     @Publish.status_update
     def delete_extract(self, params: DeleteGet):
-        MinioConfig().delete_file(bucket_name=params.bucket_name, file_name=params.file_name)
+        LocalStorage().delete_file(bucket_name=params.bucket_name, file_name=params.file_name)
         file_url = '/' + params.bucket_name + '/' + params.file_name
         Storage.remove(file_url=file_url)
         return Response(status=status.HTTP_200_OK, data=Utils.success_response_data(message=self.delete_data))
 
     @Common().exception_handler
     def get_extract(self, params: StorageGet):
-        obj = MinioConfig().get_file(bucket_name=params.bucket_name, file_name=params.file_name)
+        obj = LocalStorage().get_file(bucket_name=params.bucket_name, file_name=params.file_name)
         if params.dummy:
             return Response(status=status.HTTP_200_OK, data=Utils.success_response_data(message=self.fetch_data,data=json.loads(obj.data)))
         response = HttpResponse(obj.data, content_type='image/png')

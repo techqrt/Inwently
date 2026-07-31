@@ -14,6 +14,7 @@ class Brand(models.Model):
     brand_code = models.CharField(max_length=50, default="", unique=True)
     secure = models.BooleanField(default=False)
     organisation_id = models.ForeignKey(Organisation, on_delete=models.CASCADE)
+    is_active = models.BooleanField(default=True)
 
     class Meta:
         db_table = 'brand'
@@ -40,8 +41,8 @@ class Brand(models.Model):
         filters= Q(organisation_id__company_name=organisation_name)
 
         if params.filter_key and params.filter_value:
-            if params.filter_key== 'is_active':
-                filters = filters & Q(**{params.filter_key:params.filter_value.lower() == 'true'})
+            if params.filter_key.lower()== 'is_active':
+                filters = filters & Q(is_active=params.filter_value.lower() == 'true')
             else:
                 filters=filters & Q(**{params.filter_key:params.filter_value})
         
