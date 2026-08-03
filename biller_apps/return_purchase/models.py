@@ -29,18 +29,18 @@ class ReturnPurchase(models.Model):
 
     def create(self, purchase_id: int, supplier_id: int, organisation_id: int, item_id: int,
                organisation_name: str, return_reason: str, quantity: float, tax: float, total_price: float) -> int:
-        self.purchase = Purchase(purchase_id)
-        self.supplier = Supplier(supplier_id)
-        self.organisation_id = Organisation(organisation_id)
-        self.item = Items(item_id)
+        _price = total_price
+        self.purchase = Purchase.objects.get(purchase_id=purchase_id).purchase_bill
+        self.supplier = Supplier.objects.get(supplier_id=supplier_id)
+        self.organisation_id = Organisation.objects.get(organisation_id=organisation_id)
+        self.item = Items.objects.get(item_id=item_id)
         self.return_reason = return_reason
         self.quantity = quantity
         self.tax = tax
         self.total_price = total_price
         self.created_date_time = timezone.now()
         self.save()
-        self.return_code = ''.join([i[0] for i in organisation_name.split()]) + '_' + str(
-            self.return_id)
+        self.return_code = ''.join([i[0] for i in organisation_name.split()]) + '_' + str(self.return_id)
         self.save()
         return self.return_id
 

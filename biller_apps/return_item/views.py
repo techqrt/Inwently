@@ -35,10 +35,10 @@ class ReturnItemView:
     # @Common().exception_handler
     def create_extract(self, params: ReturnItemRequest, token_payload: Payload):
         with transaction.atomic():
-            bill_exists = Billing.objects.filter(bill_number=params.purchase_bill_number).exists()
+            bill_exists = Billing.objects.filter(customer_billing_id__bill_number=params.purchase_bill_number).exists()
             item_exists = Items.objects.filter(item_code=params.item_code).exists()
             supplier_exists = Supplier.objects.filter(supplier_code=params.supplier_code).exists()
-            billing_id = Billing.objects.get(bill_number=params.purchase_bill_number).billing_id
+            billing_id = Billing.objects.get(customer_billing_id__bill_number=params.purchase_bill_number).billing_id
             item_id = Items.objects.get(item_code=params.item_code).item_id
             supplier_id = Supplier.objects.get(supplier_code=params.supplier_code).supplier_id
 

@@ -12,18 +12,31 @@ from biller_apps.inventory.dataclasses.request.get_all import InventoryGetAll
 from biller_apps.inventory.models import Inventory
 from biller_apps.inventory.utils import InventoryUtils
 
-
+FILTER_MAPPING = {
+    "name": "item_id__name",
+    "branch_name": "shop_id__name",
+    "item_name": "item_id__name",
+}
 class InventoryView():
     def __init__(self):
         self.data_get = "Data fetched successfully"
         super().__init__()
+        
 
     @Common().exception_handler
     def get_all_extract(self, params: InventoryGetAll, token_payload: Payload):
         inventory = Inventory.get_all(organisation_name=token_payload.organisationName)
         if params.filter_key and params.filter_value:
-            filter_condition = {params.filter_key: params.filter_value}
-            inventory = inventory.filter(**filter_condition)
+          if params.filter_key not in FILTER_MAPPING:
+           raise ValueError(Constants.invalid_filter_key)
+
+          db_field = FILTER_MAPPING[params.filter_key]
+
+          filter_condition = {
+           f"{db_field}__icontains": params.filter_value
+          }
+
+          inventory = inventory.filter(**filter_condition)
 
         inventory = inventory.order_by(params.ordering)
 

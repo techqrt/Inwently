@@ -23,7 +23,7 @@ class Organisation(models.Model):
     plan = models.CharField(max_length=100,default='CUSTOM')
     plan_expiry = models.DateTimeField(default=timezone.now)
     payment_gateway = models.BooleanField(default=False)
-
+    is_active = models.BooleanField(default=True)
 
     class Meta:
         db_table = 'organisation'
@@ -83,22 +83,59 @@ class Organisation(models.Model):
 
 
     @staticmethod
-    def get_all(organisation_name: str,params:GetAll) -> list:
+    def get_all(organisation_name: str, params: GetAll) -> list:
         filters = Q(company_name=organisation_name)
+
         if params.filter_key and params.filter_value:
-            if params.filter_value=='is_active':
-                filters&=Q(**{params.filter_key:params.filter_value.lower()=='true'})
+
+            if params.filter_key.lower() == 'is_active':
+                filters &= Q(
+                    is_active=params.filter_value.lower() == 'true'
+            )
+
+            elif params.filter_key.lower() == 'approval':
+               filters &= Q(
+                   approval=params.filter_value.lower() == 'true'
+            )
+
             else:
-                filters&=Q(**{params.filter_key:params.filter_value})
-        if len(params.search_key)>0:
-            filters&=Q(company_name__icontains=params.search_key)
-        if params.sort_by == 'name':
-            params.sort_by = 'company_name'
-            ordering = f"{'-' if params.sort_order == 'desc' else ''}{params.sort_by}"
+               filters &= Q(
+                 **{params.filter_key: params.filter_value}
+            )
+
+        if params.search_key:
+            filters &= Q(
+              company_name__icontains=params.search_key
+            )
+
+
+        queryset = Organisation.objects.filter(filters)
+
         
-        return Organisation.objects.filter(company_name=organisation_name).values('owner_name', 'owner_mobile', 'owner_alternate_mobile' ,'company_name',
-                                                                  'created_date_time',
-                                                                  'shop_count', 'employee_count', 'approval','plan','plan_expiry')or[]
+        if params.sort_by:
+
+           if params.sort_by == 'name':
+             params.sort_by = 'company_name'
+
+             ordering = f"{'-' if params.sort_order == 'desc' else ''}{params.sort_by}"
+
+             queryset = queryset.order_by(ordering)
+
+
+        return queryset.values(
+         'organisation_id',
+         'owner_name',
+         'owner_mobile',
+         'owner_alternate_mobile',
+         'company_name',
+         'created_date_time',
+         'shop_count',
+         'employee_count',
+         'approval',
+         'plan',
+         'plan_expiry',
+         'is_active'
+    )
 
 class Version(models.Model):
     """Model to store version details for the application."""

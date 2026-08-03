@@ -51,7 +51,7 @@ class InventoryGetAllSerializer(serializers.Serializer):
                 required=False,
                 type=OpenApiTypes.STR, 
                 location=OpenApiParameter.QUERY, 
-                default='name'
+                default='item_name'
             ),
             OpenApiParameter(
                 name='sort_order', 
@@ -63,18 +63,18 @@ class InventoryGetAllSerializer(serializers.Serializer):
             ),
             OpenApiParameter(
                 name='filter_key', 
-                description='Field to filter by (e.g., "item_name")',
+                description='Field to filter by (e.g., "item_name","branch_name")',
                 required=False,
                 location=OpenApiParameter.QUERY,
                 type=str, 
                 enum=['item_name', 'branch_name']
             ),
+           
             OpenApiParameter(
                 name='filter_value', 
-                description='Value for the filter field (e.g., "true" or "false" for "is_active")',
+                description='Value for selected filter field (example: "item_name" filter_key can have "item1" as filter_value)',
+           
                 required=False,
                 location=OpenApiParameter.QUERY,
-                type=str, 
-                enum=['true', 'false']
-            )
+                type=OpenApiTypes.STR)
         ]

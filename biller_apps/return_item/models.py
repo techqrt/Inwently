@@ -29,10 +29,10 @@ class ReturnItem(models.Model):
 
     def create(self, bill_id: int, supplier_id: int, organisation_id: int, item_id: int,
                organisation_name: str, return_reason: str, quantity: float, price: float, tax: float) -> int:
-        self.bill = Billing(bill_id)
-        self.supplier = Supplier(supplier_id)
-        self.organisation_id = Organisation(organisation_id)
-        self.item = Items(item_id)
+        self.bill = Billing.objects.get(billing_id=bill_id)
+        self.supplier = Supplier.objects.get(supplier_id=supplier_id)
+        self.organisation_id = Organisation.objects.get(organisation_id=organisation_id)
+        self.item = Items.objects.get(item_id=item_id)
         self.return_reason = return_reason
         self.quantity = quantity
         self.price = price
@@ -93,7 +93,7 @@ class ReturnItem(models.Model):
     @staticmethod
     def get_item_by_bill(bill_number: int, organisation_name: str) -> list:
         return Billing.objects.filter(
-            bill_number=bill_number, organisation_id__company_name=organisation_name
+            customer_billing_id__bill_number=bill_number, customer_billing_id__organisation_id__company_name=organisation_name
         ).values(
             'item_id__item_code', 'item_id__name', 'quantity', 'total_price'
         ).order_by('-created_at')

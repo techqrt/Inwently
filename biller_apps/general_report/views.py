@@ -23,6 +23,7 @@ class GeneralReportView:
         self.data_no_match = "No matching report found"
         super().__init__()
 
+    
     @Common().exception_handler
     def get_purchase_reports(self, params: GeneralReportGet, token_payload: Payload):
         data = GeneralReport.get_purchase_reports(
@@ -32,11 +33,51 @@ class GeneralReportView:
         )
 
         if params.filter_key and params.filter_value:
-            filter_condition = {params.filter_key: params.filter_value}
-            data = data.filter(**filter_condition)
+           allowed_filters = [
+            "item__name",
+            "purchase_bill__supplier__name",
+            "buying_price",
+            "quantity",
+            "tax",
+            "purchase_bill__bill_amount",
+            "purchase_bill__purchase_bill_number",
+            "purchase_bill__purchase_code",
+            "purchase_bill__created_date_time",
+        ]
+
+        if params.filter_key not in allowed_filters:
+            raise ValueError(
+                f"Filtering by {params.filter_key} is not allowed for purchase reports."
+            )
+            
         
-        if not data:
-            raise ValueError(self.data_no_match)
+        # Text fields
+        if params.filter_key in [
+            "item__name",
+            "purchase_bill__supplier__name",
+            "purchase_bill__purchase_bill_number",
+            "purchase_bill__purchase_code",
+        ]:
+            data = data.filter(**{
+                f"{params.filter_key}__icontains": params.filter_value
+            })
+        else:
+            data = data.filter(**{
+                params.filter_key: params.filter_value
+            })
+        # -----------------------------
+        # Sorting
+        # -----------------------------
+        data = data.order_by(params.ordering)
+
+        # -----------------------------
+        # Pagination
+        # -----------------------------
+        paginator = Paginator(data, int(params.limit))
+        page = paginator.get_page(params.page_num)
+
+        if paginator.count == 0:
+         raise ValueError(self.data_no_match)    
         
         return Response(status=status.HTTP_200_OK, data=Utils.success_response_data(message=self.data_get, data=list(data)))
 
@@ -49,7 +90,7 @@ class GeneralReportView:
         )
         
         if params.filter_key and params.filter_value:
-            filter_condition = {params.filter_key: params.filter_value}
+            filter_condition = {self.FILTER_MAPPING[params.filter_key]: params.filter_value}
             data = data.filter(**filter_condition)
         
         if not data:

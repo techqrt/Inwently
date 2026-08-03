@@ -15,6 +15,7 @@ class InventoryGetAll:
     def __post_init__(self):
         self.values_list = self.values.split(',') if self.values and len(self.values.split(',')) > 0 else []
         field_mappings = {
+            "name": "item_id__name",
             "item_name": "item_id__name",
             "branch_name": "shop_id__name"
         }

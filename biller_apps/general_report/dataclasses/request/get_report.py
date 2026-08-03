@@ -17,15 +17,29 @@ class GeneralReportGet:
         self.values_list = []
         
         field_mappings = {
-            "item_name": "purchase_id__item__name"
-        }
+        # Filter/Sort keys coming from Swagger
+        "name": "item__name",
+        "item_name": "item__name",
+        "supplier_name": "purchase_bill__supplier__name",
+        "price": "buying_price",
+        "qty": "quantity",
+        "bill_amount": "purchase_bill__bill_amount",
+        "bill_number": "purchase_bill__purchase_bill_number",
+        "purchase_code": "purchase_bill__purchase_code",
+        "date": "purchase_bill__created_date_time",}
 
-        self.sort_by = field_mappings.get(self.sort_by, self.sort_by)  # Convert if in mappings
+        if self.sort_by:
+         self.sort_by = field_mappings.get(self.sort_by, self.sort_by)
+        else:
+         self.sort_by = "purchase_bill__created_date_time"
 
-        if not self.sort_by:
-            self.sort_by = "purchase_id__item__name"
+        if self.filter_key:
+         self.filter_key = field_mappings.get(self.filter_key, self.filter_key)
+
+
+        
 
         if not self.sort_order:
-            self.sort_order = "asc"
+         self.sort_order = "asc"
 
         self.ordering = f"{'-' if self.sort_order == 'desc' else ''}{self.sort_by}"

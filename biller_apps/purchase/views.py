@@ -66,7 +66,10 @@ class PurchaseView:
             params.sort_order = 'asc'
             params.ordering = f"{'-' if params.sort_order == 'desc' else ''}{params.sort_by}"
         if params.filter_key and params.filter_value:
-            filter_condition = {params.filter_key: params.filter_value}
+            filter_value = params.filter_value
+            if params.filter_key == 'is_active':
+                filter_value = params.filter_value.lower() == 'true'
+            filter_condition = {params.filter_key: filter_value}
             purchases = purchases.filter(**filter_condition)
 
         purchases = purchases.order_by(params.ordering)

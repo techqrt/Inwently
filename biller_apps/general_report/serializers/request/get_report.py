@@ -77,13 +77,16 @@ class GeneralReportGetSerializer(serializers.Serializer):
                 location=OpenApiParameter.QUERY,
                 type=str, 
                 enum=['item_name', 'qty','price']
-            ),
+            )
+            
+
+            ,
             OpenApiParameter(
                 name='filter_value', 
-                description='Value for the filter field (e.g., "true" or "false" for "is_active")',
+                description='Value for selected filter field (example: item name, quantity, price)',
+
                 required=False,
                 location=OpenApiParameter.QUERY,
-                type=str, 
-                enum=['true', 'false']
-            )
+                type=OpenApiTypes.STR
+)
         ]

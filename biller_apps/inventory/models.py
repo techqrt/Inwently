@@ -28,5 +28,5 @@ class Inventory(models.Model):
             organisation_id__company_name=organisation_name
         ).values(
             'item_id__item_code', 'item_id__name', 'item_id__description', 'shop_id__name', 'shop_id__shop_code',
-            'item_id__brand_id__name', 'expiry_date', 'price', 'balance_qty', 'created_time'
+            'item_id__brand_id__name', 'expiry_date', 'price', 'balance_qty', 'created_time',
         ).order_by('-created_time')
