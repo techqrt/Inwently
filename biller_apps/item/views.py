@@ -79,6 +79,7 @@ class ItemView:
         return items
 
     def key_checks(self, params: ItemRequest | ItemUpdate, token_payload: Payload):
+        
         organisation = Organisation.objects.filter(company_name=token_payload.organisationName).values(
             'organisation_id').first()
         if organisation is None:
@@ -90,11 +91,23 @@ class ItemView:
         if category is None:
             raise ValueError(self.data_no_match_category)
         supplier = Supplier.objects.filter(supplier_code=params.supplier_code).values('supplier_id').first()
+       
         if supplier is None:
             raise ValueError(self.data_no_match_supplier)
-        tax_code = Taxes.get(organisation_name=token_payload.organisationName, tax_code=params.tax_code)
-        if tax_code is None:
-            raise ValueError(self.data_no_match)
+        
+        #tax_code = Taxes.get(organisation_name=token_payload.organisationName, tax_code=params.tax_code)
+        if params.tax_code:
+            tax_code = Taxes.get(
+              organisation_name=token_payload.organisationName,
+              tax_code=params.tax_code
+            )
+
+            if tax_code is None:
+                raise ValueError("No matching tax found")
+        else:
+            tax_code = None
+        
+        
         return organisation, brand, category, supplier, tax_code
 
     @Common().exception_handler
@@ -121,7 +134,7 @@ class ItemView:
                     organisation_name=token_payload.organisationName,
                     image_url=item.item_image_url,
                     hsn_code=item.hsn_code,
-                    tax_id=tax_code['tax_id']
+                    tax_id=tax_code['tax_id'] if tax_code else None,
                 )
                 created_items.append({'item_id': item_id, 'item_code': item_code})
 
@@ -130,6 +143,7 @@ class ItemView:
 
     @Common().exception_handler
     @Publish.status_update
+    
     def create_extract(self, params: ItemRequest, token_payload: Payload):
         key_check = self.key_checks(params=params, token_payload=token_payload)
         organisation, brand, category, supplier, tax_code = key_check
@@ -142,8 +156,12 @@ class ItemView:
                                                 description=params.description,
                                                 bar_qr_code=params.bar_qr_code,
                                                 organisation_name=token_payload.organisationName,
-                                                image_url=params.image_url,tax_id=tax_code['tax_id'],hsn_code=params.hsn_code)
-        data = ItemCreateResponse(itemCode=item_code, code=item_code)
+                                                image_url=params.image_url,
+                                                tax_id=tax_code['tax_id'] if tax_code else None,
+                                                hsn_code=params.hsn_code)
+           # print("Item Created with ID:", item_id, "and Code:", item_code)
+        data = ItemCreateResponse(itemCode=item_code,code=item_code)
+                                   
         return Response(status=status.HTTP_200_OK, data=Utils.success_response_data(message=self.data_create,
                                                                                     data=asdict(data)))
 
@@ -160,7 +178,7 @@ class ItemView:
         Items().update(item_id=items['item_id'], category_id=category['category_id'],
                        supplier_id=supplier['supplier_id'],
                        brand_id=brand['brand_id'], name=params.name, description=params.description,
-                       bar_qr_code=params.bar_qr_code, image_url=params.image_url,hsn_code=params.hsn_code,tax_id=tax_code['tax_id'])
+                       bar_qr_code=params.bar_qr_code, image_url=params.image_url,hsn_code=params.hsn_code,tax_id=tax_code['tax_id'] if tax_code else None,)
 
         return Response(status=status.HTTP_200_OK, data=Utils.success_response_data(message=self.data_update))
 
