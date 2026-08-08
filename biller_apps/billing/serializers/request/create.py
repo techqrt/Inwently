@@ -9,9 +9,10 @@ class BillingRequestSerializer(serializers.Serializer):
     def create(self, validated_data) -> BillingRequest:
         token_payload = self.context['request'].payload
         employee = Employees.get_with_email(email_id=token_payload.email_id)
+        
 
         return BillingRequest(
             billed_by=employee['employee_code'],
             shop_code=employee['shop_access'][0]['shopCode'],
             items=validated_data['items']
-        ) 
+        )

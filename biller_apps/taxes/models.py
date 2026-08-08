@@ -58,7 +58,9 @@ class Taxes(models.Model):
         return tax.tax_id
 
     @staticmethod
+    
     def get(organisation_name: str, tax_code: str):
+        
         return Taxes.objects.filter(organisation_id__company_name=organisation_name, tax_code=tax_code).values().first()
 
     @staticmethod

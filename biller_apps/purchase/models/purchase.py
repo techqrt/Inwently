@@ -24,7 +24,7 @@ class Purchase(models.Model):
     quantity = models.FloatField(default=0)
     quantity_unit = models.CharField(max_length=10, default='Kg')
     expiry = models.DateTimeField(default=timezone.now())
-    is_active = models.BooleanField(default=True)   
+    is_active = models.BooleanField(default=True)
 
     class Meta:
         db_table = 'purchase'
@@ -85,7 +85,7 @@ class Purchase(models.Model):
     
     @staticmethod
     def total_price(self) -> float:
-        return (self.buying_price * self.quantity) + self.tax 
+        return (self.buying_price * self.quantity) + self.tax
     
     @staticmethod
     def remove(purchase_id: int):

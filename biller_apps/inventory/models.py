@@ -18,6 +18,7 @@ class Inventory(models.Model):
     balance_qty = models.PositiveIntegerField(default=0)
     organisation_id = models.ForeignKey(Organisation, on_delete=models.DO_NOTHING)
     created_time = models.DateTimeField(default=timezone.now)
+    store_mapping = models.CharField(max_length=100, default='', null=True, blank=True)
 
     class Meta:
         db_table = 'inventory'

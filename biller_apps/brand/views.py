@@ -96,5 +96,7 @@ class BrandView:
 
     @Common().exception_handler
     def search_extract(self, params: Search, token_payload: Payload):
+        print("params.key",params.key,"token_payload.organisation_id",token_payload.organisation_id)
         data=BrandEsQuery.search_pattern_start_with_query(request_keys=params.key,organisation_id=token_payload.organisation_id)
+        print("data",data)
         return Response(status=status.HTTP_200_OK,data=Utils.success_response_data(message=self.data_get,data=data))

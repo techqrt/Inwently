@@ -25,7 +25,7 @@ from biller_apps.item.dataclasses.request.delete import ItemDelete
 from biller_apps.item.dataclasses.request.get import ItemGet
 from biller_apps.item.dataclasses.response.create import ItemCreateResponse
 from biller_apps.item.es_query import ItemEsQuery
-from biller_apps.item.models.items import Items
+from biller_apps.item.models.items import Items, ItemAttribute, ItemOtherImage
 from biller_apps.item.serializers.request.update import ItemUpdate
 from biller_apps.item.utils import ItemUtils
 from biller_apps.organisation.models import Organisation
@@ -72,14 +72,21 @@ class ItemView:
                 category_code=row['category_code'] or '',
                 supplier_code=row['supplier_code'] or '',
                 created_time=row['created_time'],
-                item_image_url=row['item_image_url'] or '',
+                image_url=row['item_image_url'] or '',
+                no_of_packets=row['item_no_of_packets'] if 'item_no_of_packets' in row else 1,
+                sku_code=row['item_sku_code'] if 'item_sku_code' in row else '',
+                plain_price=row['item_plain_price'] if 'item_plain_price' in row else 0.00,
+                printed_price=row['item_printed_price'] if 'item_printed_price' in row else 0.00,
+                moq=row['item_moq'] if 'item_moq' in row else 1.00,
+                hsn_code=row['hsn_code'] if 'hsn_code' in row else '',
+                tax_code=row['tax_code'] if 'tax_code' in row else None
             ) for index, row in df.iterrows()
         ]
 
         return items
 
     def key_checks(self, params: ItemRequest | ItemUpdate, token_payload: Payload):
-        
+
         organisation = Organisation.objects.filter(company_name=token_payload.organisationName).values(
             'organisation_id').first()
         if organisation is None:
@@ -91,10 +98,10 @@ class ItemView:
         if category is None:
             raise ValueError(self.data_no_match_category)
         supplier = Supplier.objects.filter(supplier_code=params.supplier_code).values('supplier_id').first()
-       
+
         if supplier is None:
             raise ValueError(self.data_no_match_supplier)
-        
+
         #tax_code = Taxes.get(organisation_name=token_payload.organisationName, tax_code=params.tax_code)
         if params.tax_code:
             tax_code = Taxes.get(
@@ -106,8 +113,8 @@ class ItemView:
                 raise ValueError("No matching tax found")
         else:
             tax_code = None
-        
-        
+
+
         return organisation, brand, category, supplier, tax_code
 
     @Common().exception_handler
@@ -129,12 +136,18 @@ class ItemView:
                     brand_id=brand['brand_id'],
                     name=item.name,
                     description=item.description,
-                    created_time=item.created_time,
                     bar_qr_code=item.bar_qr_code,
                     organisation_name=token_payload.organisationName,
-                    image_url=item.item_image_url,
+                    image_url=item.image_url,
                     hsn_code=item.hsn_code,
                     tax_id=tax_code['tax_id'] if tax_code else None,
+                    no_of_packets=item.no_of_packets,
+                    sku_code=item.sku_code,
+                    plain_price=item.plain_price,
+                    printed_price=item.printed_price,
+                    moq=item.moq,
+                    attributes=item.attributes,
+                    other_images=item.other_images,
                 )
                 created_items.append({'item_id': item_id, 'item_code': item_code})
 
@@ -143,7 +156,7 @@ class ItemView:
 
     @Common().exception_handler
     @Publish.status_update
-    
+
     def create_extract(self, params: ItemRequest, token_payload: Payload):
         key_check = self.key_checks(params=params, token_payload=token_payload)
         organisation, brand, category, supplier, tax_code = key_check
@@ -158,10 +171,21 @@ class ItemView:
                                                 organisation_name=token_payload.organisationName,
                                                 image_url=params.image_url,
                                                 tax_id=tax_code['tax_id'] if tax_code else None,
-                                                hsn_code=params.hsn_code)
-           # print("Item Created with ID:", item_id, "and Code:", item_code)
+                                                hsn_code=params.hsn_code,
+                                                no_of_packets=params.no_of_packets,
+                                                sku_code=params.sku_code,
+                                                plain_price=params.plain_price,
+                                                printed_price=params.printed_price,
+                                                moq=params.moq,
+                                                attributes=params.attributes,
+                                                other_images=params.other_images
+                                                )
+        #print("Item Created with ID:", item_id, "and Code:", item_code)
+        # item_code here is Items.create()'s second return value, which is the model's
+        # self.code (already falls back to the generated item_code when bar_qr_code is blank) —
+        # use it rather than params.bar_qr_code, which may be empty.
         data = ItemCreateResponse(itemCode=item_code,code=item_code)
-                                   
+
         return Response(status=status.HTTP_200_OK, data=Utils.success_response_data(message=self.data_create,
                                                                                     data=asdict(data)))
 
@@ -178,7 +202,14 @@ class ItemView:
         Items().update(item_id=items['item_id'], category_id=category['category_id'],
                        supplier_id=supplier['supplier_id'],
                        brand_id=brand['brand_id'], name=params.name, description=params.description,
-                       bar_qr_code=params.bar_qr_code, image_url=params.image_url,hsn_code=params.hsn_code,tax_id=tax_code['tax_id'] if tax_code else None,)
+                       bar_qr_code=params.bar_qr_code, image_url=params.image_url,hsn_code=params.hsn_code,tax_id=tax_code['tax_id'] if tax_code else None,
+                       no_of_packets=getattr(params, 'no_of_packets', 1),
+                       sku_code=getattr(params, 'sku_code', ''),
+                       plain_price=getattr(params, 'plain_price', 0.00),
+                       printed_price=getattr(params, 'printed_price', 0.00),
+                       moq=getattr(params, 'moq', 1.00),
+                       attributes=getattr(params, 'attributes', None),
+                       other_images=getattr(params, 'other_images', None))
 
         return Response(status=status.HTTP_200_OK, data=Utils.success_response_data(message=self.data_update))
 
@@ -198,9 +229,17 @@ class ItemView:
         pages = Paginator(Items.get_all(organisation_name=token_payload.organisationName,params=params), params.limit)
         if pages.num_pages < params.page_num:
             raise ValueError(Constants.page_num_exceeded)
-        items = pages.page(params.page_num)
+        items = list(pages.page(params.page_num))
+        item_ids = [item['item_id'] for item in items]
+        attributes_by_item = ItemAttribute.get_all_for_items(item_ids)
+        other_images_by_item = ItemOtherImage.get_all_for_items(item_ids)
+
         inventory_utils = ItemUtils(columns_required=params.values_list)
         data = json.loads(inventory_utils.mapper(data=items))
+        for row, item in zip(data, items):
+            row['attributes'] = attributes_by_item.get(item['item_id'], [])
+            row['other_images'] = other_images_by_item.get(item['item_id'], [])
+
         data = Utils.add_page_parameter(final_data=data, page_num=params.page_num,
                                         present_url=token_payload.present_url, total_page=pages.num_pages,
                                         total_count=pages.count,
@@ -210,7 +249,16 @@ class ItemView:
 
     @Common().exception_handler
     def search_extract(self, params: Search, token_payload: Payload):
-        data  = ItemEsQuery.search_pattern_start_with_query(request_keys=params.key,organisation_id=token_payload.organisation_id)
+        data = ItemEsQuery.search_pattern_start_with_query(request_keys=params.key,organisation_id=token_payload.organisation_id)
+
+        item_ids = [row['item_id'] for row in data if row.get('item_id') is not None]
+        if item_ids:
+            attributes_by_item = ItemAttribute.get_all_for_items(item_ids)
+            other_images_by_item = ItemOtherImage.get_all_for_items(item_ids)
+            for row in data:
+                row['attributes'] = attributes_by_item.get(row.get('item_id'), [])
+                row['other_images'] = other_images_by_item.get(row.get('item_id'), [])
+
         return Response(status=status.HTTP_200_OK,data=Utils.success_response_data(message=self.data_get, data=data))
 
     @Common().exception_handler
@@ -228,9 +276,13 @@ class ItemView:
 
     @Common().exception_handler
     def get_extract(self, params: ItemGet, token_payload: Payload):
-        items = Items.get(organisation_name=token_payload.organisationName, item_code=params.item_code)
-        if len(items) == 0:
+        item = Items.get(organisation_name=token_payload.organisationName, item_code=params.item_code, single=True)
+        if item is None:
             raise ValueError(self.data_no_match)
+        attributes = item.pop('attributes', [])
+        other_images = item.pop('other_images', [])
         inventory_utils = ItemUtils(columns_required=params.values_list)
-        data = json.loads(inventory_utils.mapper(data=items))[0]
+        data = json.loads(inventory_utils.mapper(data=[item]))[0]
+        data['attributes'] = attributes
+        data['other_images'] = other_images
         return Response(status=status.HTTP_200_OK, data=Utils.success_response_data(message=self.data_get, data=data))

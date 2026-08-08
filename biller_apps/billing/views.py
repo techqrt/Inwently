@@ -59,6 +59,7 @@ class BillingView:
         shop = Shops.objects.filter(shop_code=params.shop_code).values('shop_id').first()
         if shop is None:
             raise ValueError(self.data_no_match_shop)
+        # print("employee & shop:", employee, shop)
         return employee, shop
 
     @Common().exception_handler

@@ -35,4 +35,5 @@ class ElasticQuery:
             # Elasticsearch isn't configured/reachable in this environment -
             # degrade to no results instead of failing the whole request.
             Logger.log.warning('Elasticsearch unavailable, returning empty search result: ' + str(e))
-            return []
+            raise
+            #return []

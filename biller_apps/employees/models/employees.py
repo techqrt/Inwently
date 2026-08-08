@@ -254,6 +254,7 @@ class Employees(models.Model):
 
     @staticmethod
     def get_with_email(email_id: str) -> dict:
+        #print(email_id)
         return Employees.objects.filter(employee_credentials_id__email_id=email_id).values().first()
 
     @staticmethod

@@ -12,6 +12,7 @@ class GetAll:
     filter_value: str
     search_key: str
     
+    
 
     def __post_init__(self):
         self.values_list = self.values.split(',') if len(self.values.split(',')) > 0 and self.values != '' else []

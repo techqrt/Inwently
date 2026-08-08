@@ -21,4 +21,7 @@ Pillow==11.1.0
 behave-django==0.2.3
 elasticsearch==8.8.0
 reportlab==4.3.1
-openpyxl==3.1.5
+openpyxl==3.1.
+elasticsearch==7.17.13
+elasticsearch-dsl==7.4.1
+django-elasticsearch-dsl==7.4.0

@@ -90,5 +90,5 @@ class TaxesView:
     def search_extract(self, params: Search, token_payload: Payload):
 
         data= TaxesEsQuery.search_pattern_start_with_query(request_keys=params.key,organisation_id=token_payload.organisation_id)
-
+        
         return Response(status=status.HTTP_200_OK, data=Utils.success_response_data(message=self.data_get, data=data))
