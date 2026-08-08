@@ -13,7 +13,9 @@ class Inventory(models.Model):
     inventory_id = models.AutoField(primary_key=True)
     item_id = models.ForeignKey(Items, on_delete=models.DO_NOTHING)
     shop_id = models.ForeignKey(Shops, on_delete=models.DO_NOTHING)
-    expiry_date = models.DateField(default=timezone.now)
+    inventory_code = models.CharField(max_length=25, null=True, blank=True, unique=True)
+    # Nullable: expiry_date is optional on create (not every item batch has one).
+    expiry_date = models.DateField(null=True, blank=True, default=None)
     price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     balance_qty = models.PositiveIntegerField(default=0)
     organisation_id = models.ForeignKey(Organisation, on_delete=models.DO_NOTHING)
@@ -23,11 +25,8 @@ class Inventory(models.Model):
     class Meta:
         db_table = 'inventory'
 
-    @staticmethod 
-    def get_all(organisation_name: str) -> list:
-        return Inventory.objects.filter(
-            organisation_id__company_name=organisation_name
-        ).values(
-            'item_id__item_code', 'item_id__name', 'item_id__description', 'shop_id__name', 'shop_id__shop_code',
-            'item_id__brand_id__name', 'expiry_date', 'price', 'balance_qty', 'created_time',
-        ).order_by('-created_time')
+    # NOTE: the old Inventory.get_all(organisation_name) staticmethod has been removed.
+    # It was superseded by InventoryUtils.get_all(organisation_id, ...), which supports
+    # pagination-friendly filtering/sorting by shop_code, item_code, and other fields.
+    # If anything else in the codebase still calls Inventory.get_all(...), it will need
+    # to be updated to use InventoryUtils.get_all(...) instead.
