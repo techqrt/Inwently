@@ -11,6 +11,8 @@ from biller_apps.inventory.serializers.request.get_all import InventoryGetAllSer
 from biller_apps.inventory.serializers.request.update import InventoryUpdateSerializer
 from biller_apps.inventory.serializers.response.get_all import InventoryDataSerializer
 from biller_apps.inventory.views import InventoryView
+from biller_apps.inventory.serializers.request.log_get_all import InventoryLogGetAllSerializer
+from biller_apps.inventory.serializers.response.log_get_all import InventoryLogDataSerializer  # see note below
 
 
 class InventoryViewController:
@@ -52,3 +54,13 @@ class InventoryViewController:
     @SerializerValidations(serializer=InventoryGetAllSerializer).validate
     def get_all(request: Request) -> Response:
         return InventoryView().get_all_extract(params=request.params, token_payload=request.payload)
+
+    @extend_schema(
+        description="Get all Inventory logs",
+        parameters=InventoryLogGetAllSerializer.get_all_parameters(),
+        responses=SwaggerPage.response(response=InventoryLogDataSerializer)
+    )
+    @api_view(['GET'])
+    @SerializerValidations(serializer=InventoryLogGetAllSerializer).validate
+    def get_all_logs(request: Request) -> Response:
+        return InventoryView().get_all_logs_extract(params=request.params, token_payload=request.payload)

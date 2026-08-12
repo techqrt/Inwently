@@ -14,6 +14,7 @@ from biller_apps.inventory.dataclasses.request.create import InventoryCreate
 from biller_apps.inventory.dataclasses.request.get import InventoryGet
 from biller_apps.inventory.dataclasses.request.get_all import InventoryGetAll
 from biller_apps.inventory.dataclasses.request.update import InventoryUpdate
+from biller_apps.inventory.dataclasses.request.log_get_all import InventoryLogGetAll
 from biller_apps.inventory.utils import InventoryUtils
 from biller_apps.organisation.models import Organisation
 
@@ -118,3 +119,33 @@ class InventoryView:
                                         next_page_required=True if pages.num_pages != params.page_num else False)
 
         return Response(status=status.HTTP_200_OK, data=Utils.success_response_data(message=self.data_get, data=data))
+
+
+
+
+    @Common().exception_handler
+    def get_all_logs_extract(self, params: InventoryLogGetAll, token_payload: Payload):
+        organisation_id = self._resolve_organisation_id(token_payload.organisationName)
+
+        logs = InventoryUtils.get_all_logs(
+        organisation_id=organisation_id,
+        inventory_code=params.inventory_code,
+        eventtype=params.eventtype,
+        status=params.status,
+        batch_id=params.batch_id,
+        ordering=params.ordering,
+        )
+
+        pages = Paginator(logs, params.limit)
+        if pages.num_pages < params.page_num:
+           raise ValueError(Constants.page_num_exceeded)
+        data = list(pages.page(params.page_num))
+
+        data = json.loads(json.dumps(data, default=str))  # simple serialization; swap for your mapper if you want the camelCase column mapping
+        data = Utils.add_page_parameter(
+        final_data=data, page_num=params.page_num, present_url=token_payload.present_url,
+        total_page=pages.num_pages, total_count=pages.count,
+        next_page_required=pages.num_pages != params.page_num,
+        )
+        return Response(status=status.HTTP_200_OK, data=Utils.success_response_data(
+           message=self.data_get, data=data))

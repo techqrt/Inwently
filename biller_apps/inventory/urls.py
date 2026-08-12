@@ -8,5 +8,6 @@ urlpatterns = [
     path('get/', InventoryViewController.get, name='inventory_get'),
     path('update/', InventoryViewController.update, name='inventory_update'),
     path('get_all/', InventoryViewController.get_all, name='inventory_get_all'),
+    path('inventory-logs-get-all/', InventoryViewController.get_all_logs, name='inventory-logs-get-all'),
 
 ]
