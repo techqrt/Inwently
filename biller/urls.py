@@ -30,6 +30,7 @@ urlpatterns = [
     path('general-report/', include('biller_apps.general_report.urls')),
     path('overview-report/', include('biller_apps.overview_report.urls')),
     path('admin-report/', include('biller_apps.admin_report.urls')),
+    path('customer-quotation/', include('biller_apps.customer_quotation.urls')),
 
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/schema/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),

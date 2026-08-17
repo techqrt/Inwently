@@ -10,6 +10,8 @@ from biller_apps.shops.models import Shops
 
 class CustomerBills(models.Model):
     customer_bills_id = models.AutoField(primary_key=True)
+    # CustomerBills — add traceability field
+    pos_id = models.IntegerField(null=True, blank=True, default=None)
     bill_number = models.CharField(max_length=100, default='')
     created_at = models.DateTimeField(default=timezone.now)
     organisation_id = models.ForeignKey(Organisation, on_delete=models.CASCADE)

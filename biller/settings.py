@@ -67,6 +67,7 @@ INSTALLED_APPS = [
     'biller_apps.general_report',
     'biller_apps.overview_report',
     'biller_apps.admin_report',
+    'biller_apps.customer_quotation',
 
 ]
 

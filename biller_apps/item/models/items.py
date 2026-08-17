@@ -16,7 +16,7 @@ from biller_apps.taxes.models import Taxes
 # item model
 class Items(models.Model):
     item_id = models.AutoField(primary_key=True)
-    name = models.CharField(max_length=100, default='', unique=True)
+    name = models.CharField(max_length=100, default='', unique=False)
     description = models.CharField(max_length=350, default='')
     code = models.CharField(max_length=100, default='', unique=True)
     hsn_code = models.CharField(max_length=100, null=True, blank=True, default=None)
