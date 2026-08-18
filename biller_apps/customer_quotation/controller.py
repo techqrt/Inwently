@@ -28,22 +28,9 @@ class CustomerQuotationViewController:
     def review(request: Request) -> Response:
         return CustomerQuotationView().review_extract(params=request.params, token_payload=request.payload)
 
-    @extend_schema(parameters=[
-            OpenApiParameter(
-                name="customer_quotation_id",
-                description="Customer quotation ID",
-                required=False,
-                type=OpenApiTypes.INT,
-                location=OpenApiParameter.QUERY,
-            ),
-            OpenApiParameter(
-                name="customer_quotation_code",
-                description="Customer quotation code",
-                required=False,
-                type=OpenApiTypes.STR,
-                location=OpenApiParameter.QUERY,
-            ),
-        ])
+    @extend_schema(description="Get a customer quotation by ID or code",
+                   parameters=CustomerQuotationGetSerializer.get_parameters()
+                   )
     @api_view(['GET'])
     @SerializerValidations(serializer=CustomerQuotationGetSerializer).validate
     def get(request: Request) -> Response:

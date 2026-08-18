@@ -17,16 +17,16 @@ class CustomerQuotationGetSerializer(serializers.Serializer):
         allow_blank=False
     )
 
-    def validate(self, attrs):
-        quotation_id = attrs.get("customer_quotation_id")
-        quotation_code = attrs.get("customer_quotation_code")
+    # def validate(self, attrs):
+    #     quotation_id = attrs.get("customer_quotation_id")
+    #     quotation_code = attrs.get("customer_quotation_code")
 
-        if quotation_id is None and not quotation_code:
-            raise serializers.ValidationError(
-                "Either customer_quotation_id or customer_quotation_code is required."
-            )
+    #     if quotation_id is None and not quotation_code:
+    #         raise serializers.ValidationError(
+    #             "Either customer_quotation_id or customer_quotation_code is required."
+    #         )
 
-        return attrs
+    #     return attrs
 
     def create(self, validated_data):
         return CustomerQuotationGet(**validated_data)
@@ -43,7 +43,7 @@ class CustomerQuotationGetSerializer(serializers.Serializer):
             ),
             OpenApiParameter(
                 name="customer_quotation_code",
-                description="Customer quotation code",
+                description="Customer quotation code (e.g. 'T_1')",
                 required=False,
                 type=OpenApiTypes.STR,
                 location=OpenApiParameter.QUERY,
