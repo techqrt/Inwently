@@ -92,10 +92,10 @@ class CustomerQuotationView:
             raise ValueError(Constants.page_num_exceeded)
         data = list(pages.page(params.page_num))
         data = json.loads(json.dumps(data, default=str))
-        data = CustomerQuotationUtils.add_page_parameter(
-            final_data=data, page_num=params.page_num, present_url=token_payload.present_url,
-            total_page=pages.num_pages, total_count=pages.count,
-            next_page_required=pages.num_pages != params.page_num,
+        data = Utils.add_page_parameter(                      # ← this line — must be Utils, not CustomerQuotationUtils
+             final_data=data, page_num=params.page_num, present_url=token_payload.present_url,
+             total_page=pages.num_pages, total_count=pages.count,
+             next_page_required=pages.num_pages != params.page_num,
         )
         return Response(status=status.HTTP_200_OK, data=Utils.success_response_data(
             message=self.data_get, data=data))
