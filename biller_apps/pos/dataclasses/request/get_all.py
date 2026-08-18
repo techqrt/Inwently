@@ -8,7 +8,7 @@ class POSGetAll:
     page_num: int
     limit: int
     present_url: str = ""
-    is_executed: Optional[bool] = None
+    status: Optional[str] = None
     sort_by: str = "created_date"
     sort_order: str = "desc"
     values_list: list = field(default_factory=list)

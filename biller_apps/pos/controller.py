@@ -71,6 +71,7 @@ class POSViewController:
 
     @extend_schema(
         description="Get a single POS draft with its items",
+        parameters=POSGetSerializer.get_parameters(),
     )
     @api_view(['GET'])
     @SerializerValidations(serializer=POSGetSerializer).validate
@@ -78,7 +79,8 @@ class POSViewController:
         return POSView().get_extract(params=request.params, token_payload=request.payload)
 
     @extend_schema(
-        description="Get all POS records",
+    description="Get all POS records",
+    parameters=POSGetAllSerializer.get_all_parameters(),
     )
     @api_view(['GET'])
     @SerializerValidations(serializer=POSGetAllSerializer).validate

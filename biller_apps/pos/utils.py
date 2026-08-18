@@ -2,35 +2,56 @@
 from django.db import transaction
 from django.db.models import Sum
 
+from biller_apps.customer.models import Customer
+from biller_apps.customer_quotation.models import CustomerQuotation
+from biller_apps.customer_quotation.utils import CustomerQuotationUtils
 from biller_apps.item.models.items import Items
 from biller_apps.shops.models import Shops
 from biller_apps.pos.models import POS, POSItem
-from biller_apps.customer_quotation.utils import CustomerQuotationUtils
 
 
 class POSUtils:
 
     @staticmethod
-    def _calculate_total(price, tax, discount, quantity) -> "Decimal":
+    def _calculate_total(price, tax, discount, quantity):
         return (price + tax) * quantity - discount
 
     @staticmethod
-    def _recalculate_pos_amount(pos: POS) -> None:
+    def _recalculate_amount(pos: POS) -> None:
         total = POSItem.objects.filter(pos_id=pos).aggregate(s=Sum('total'))['s'] or 0
         pos.amount = total
         pos.save(update_fields=['amount'])
 
     # =========================================================
-    # CREATE (header only — empty cart)
+    # CREATE — resolves customer_code / customer_quotation_code
     # =========================================================
-    # biller_apps/pos/utils.py — revised create()
     @staticmethod
     @transaction.atomic
-    def create(customer_id, shop_code, organisation_id, organisation_name,
-               items, billed_by=None, customer_quotation_id=None):
+    def create(customer_code, shop_code, organisation_id, organisation_name,
+               items, billed_by=None, customer_quotation_code=None):
+
+        # NOTE: assumes Customer has a `customer_code` field, mirroring
+        # item_code/shop_code — confirm this against the real Customer model.
+        customer = Customer.objects.filter(
+            customer_code=customer_code, organisation_id_id=organisation_id
+        ).first()
+        if not customer:
+            raise ValueError(f"Customer with customer_code '{customer_code}' does not exist.")
+
         shop = Shops.objects.filter(shop_code=shop_code, organisation_id_id=organisation_id).first()
         if not shop:
             raise ValueError(f"Shop with shop_code '{shop_code}' does not exist.")
+
+        customer_quotation_id = None
+        if customer_quotation_code:
+            quotation = CustomerQuotation.objects.filter(
+                customer_quotation_code=customer_quotation_code, organisation_id_id=organisation_id
+            ).first()
+            if not quotation:
+                raise ValueError(
+                    f"Customer quotation with code '{customer_quotation_code}' does not exist."
+                )
+            customer_quotation_id = quotation.customer_quotation_id
 
         resolved_items = []
         for entry in items:
@@ -42,8 +63,11 @@ class POSUtils:
             resolved_items.append((item, entry))
 
         pos = POS.objects.create(
-            customer_id=customer_id, shop_id=shop, organisation_id_id=organisation_id,
-            billed_by=billed_by, customer_quotation_id=customer_quotation_id,
+            customer=customer,
+            shop_id=shop,
+            organisation_id_id=organisation_id,
+            billed_by=billed_by,
+            customer_quotation_id=customer_quotation_id,
         )
         pos.pos_code = ''.join([i[0] for i in organisation_name.split()]) + '_' + str(pos.pos_id)
         pos.save()
@@ -63,91 +87,196 @@ class POSUtils:
         return pos
 
     # =========================================================
-    # ADD ITEM
+    # UPDATE — partial replace of items + header fields
     # =========================================================
     @staticmethod
     @transaction.atomic
-    def add_item(pos_id, organisation_id, item_code, quantity, price, tax=0, discount=0):
+    def update(pos_id, organisation_id, items_to_add=None, items_to_update=None,
+               items_to_remove=None, discounts=None, discounts_unit=None,
+               wave_off=None, payment_type=None):
+        items_to_add = items_to_add or []
+        items_to_update = items_to_update or []
+        items_to_remove = items_to_remove or []
+
         pos = POS.objects.filter(pos_id=pos_id, organisation_id_id=organisation_id).first()
         if not pos:
-            raise ValueError("POS draft not found.")
-        if pos.is_executed:
-            raise ValueError("Cannot modify a finalized POS.")
+            raise ValueError("POS not found.")
+        if pos.status != POS.STATUS_DRAFT:
+            raise ValueError(f"Cannot modify a POS in '{pos.status}' status.")
 
-        item = Items.objects.filter(item_code=item_code, organisation_id_id=organisation_id).first()
-        if not item:
-            raise ValueError(f"Item with item_code '{item_code}' does not exist.")
+        if items_to_remove:
+            deleted, _ = POSItem.objects.filter(
+                pos_item_id__in=items_to_remove, pos_id=pos
+            ).delete()
+            if deleted != len(set(items_to_remove)):
+                raise ValueError("One or more items_to_remove were not found on this POS.")
 
-        # Stock check only (no deduction) — per current design.
-        from biller_apps.inventory.models import Inventory
-        inventory = Inventory.objects.filter(
-            item_id=item, shop_id=pos.shop_id, organisation_id_id=organisation_id
-        ).first()
-        if not inventory or inventory.balance_qty < quantity:
-            available = inventory.balance_qty if inventory else 0
-            raise ValueError(
-                f"Insufficient stock for '{item_code}': have {available}, need {quantity}."
+        for entry in items_to_update:
+            pos_item = POSItem.objects.filter(pos_item_id=entry.pos_item_id, pos_id=pos).first()
+            if not pos_item:
+                raise ValueError(f"POS item '{entry.pos_item_id}' not found on this POS.")
+
+            if entry.quantity is not None:
+                pos_item.quantity = entry.quantity
+            if entry.price is not None:
+                pos_item.price = entry.price
+            if entry.tax is not None:
+                pos_item.tax = entry.tax
+            if entry.discount is not None:
+                pos_item.discount = entry.discount
+
+            pos_item.total = POSUtils._calculate_total(
+                pos_item.price, pos_item.tax, pos_item.discount, pos_item.quantity
+            )
+            pos_item.save()
+
+        for entry in items_to_add:
+            item = Items.objects.filter(
+                item_code=entry.item_code, organisation_id_id=organisation_id
+            ).first()
+            if not item:
+                raise ValueError(f"Item with item_code '{entry.item_code}' does not exist.")
+
+            total = POSUtils._calculate_total(entry.price, entry.tax, entry.discount, entry.quantity)
+            POSItem.objects.create(
+                pos_id=pos, item_id=item, quantity=entry.quantity,
+                price=entry.price, tax=entry.tax, discount=entry.discount, total=total,
             )
 
-        total = POSUtils._calculate_total(price, tax, discount, quantity)
-        pos_item = POSItem.objects.create(
-            pos_id=pos, item_id=item, quantity=quantity,
-            price=price, tax=tax, discount=discount, total=total,
-        )
-        POSUtils._recalculate_pos_amount(pos)
-        return pos_item
+        header_fields = []
+        if discounts is not None:
+            pos.discounts = discounts
+            header_fields.append("discounts")
+        if discounts_unit is not None:
+            pos.discounts_unit = discounts_unit
+            header_fields.append("discounts_unit")
+        if wave_off is not None:
+            pos.wave_off = wave_off
+            header_fields.append("wave_off")
+        if payment_type is not None:
+            pos.payment_type = payment_type
+            header_fields.append("payment_type")
+        if header_fields:
+            pos.save(update_fields=header_fields)
+
+        if not POSItem.objects.filter(pos_id=pos).exists():
+            raise ValueError("POS cannot end up with zero items after update.")
+
+        POSUtils._recalculate_amount(pos)
+        return pos
 
     # =========================================================
-    # UPDATE ITEM
-    # =========================================================
-    @staticmethod
-    @transaction.atomic
-    def update_item(pos_item_id, organisation_id, quantity=None, price=None, tax=None, discount=None):
-        pos_item = POSItem.objects.filter(
-            pos_item_id=pos_item_id, pos_id__organisation_id_id=organisation_id
-        ).first()
-        if not pos_item:
-            raise ValueError("POS item not found.")
-        if pos_item.pos_id.is_executed:
-            raise ValueError("Cannot modify a finalized POS.")
-
-        if quantity is not None:
-            pos_item.quantity = quantity
-        if price is not None:
-            pos_item.price = price
-        if tax is not None:
-            pos_item.tax = tax
-        if discount is not None:
-            pos_item.discount = discount
-
-        pos_item.total = POSUtils._calculate_total(
-            pos_item.price, pos_item.tax, pos_item.discount, pos_item.quantity
-        )
-        pos_item.save()
-        POSUtils._recalculate_pos_amount(pos_item.pos_id)
-        return pos_item
-
-    # =========================================================
-    # DELETE ITEM
+    # STATUS TRANSITIONS
     # =========================================================
     @staticmethod
     @transaction.atomic
-    def delete_item(pos_item_id, organisation_id):
-        pos_item = POSItem.objects.filter(
-            pos_item_id=pos_item_id, pos_id__organisation_id_id=organisation_id
-        ).first()
-        if not pos_item:
-            raise ValueError("POS item not found.")
-        if pos_item.pos_id.is_executed:
-            raise ValueError("Cannot modify a finalized POS.")
+    def send_to_customer(pos_id, organisation_id):
+        pos = POS.objects.filter(pos_id=pos_id, organisation_id_id=organisation_id).first()
+        if not pos:
+            raise ValueError("POS not found.")
+        if pos.status != POS.STATUS_DRAFT:
+            raise ValueError(f"Cannot send a POS in '{pos.status}' status.")
+        if not POSItem.objects.filter(pos_id=pos).exists():
+            raise ValueError("Cannot send an empty POS.")
 
-        pos = pos_item.pos_id
-        pos_item.delete()
-        POSUtils._recalculate_pos_amount(pos)
-        return True
+        pos.status = POS.STATUS_SENT_TO_CUSTOMER
+        pos.save(update_fields=["status"])
+        return pos
+
+    @staticmethod
+    @transaction.atomic
+    def confirm(pos_id, organisation_id):
+        pos = POS.objects.filter(pos_id=pos_id, organisation_id_id=organisation_id).first()
+        if not pos:
+            raise ValueError("POS not found.")
+        if pos.status not in (POS.STATUS_DRAFT, POS.STATUS_SENT_TO_CUSTOMER):
+            raise ValueError(f"Cannot confirm a POS in '{pos.status}' status.")
+        if not POSItem.objects.filter(pos_id=pos).exists():
+            raise ValueError("Cannot confirm an empty POS.")
+
+        pos.status = POS.STATUS_CONFIRMED
+        pos.save(update_fields=["status"])
+        return pos
+
+    @staticmethod
+    @transaction.atomic
+    def cancel(pos_id, organisation_id):
+        pos = POS.objects.filter(pos_id=pos_id, organisation_id_id=organisation_id).first()
+        if not pos:
+            raise ValueError("POS not found.")
+        if pos.status == POS.STATUS_EXECUTED:
+            raise ValueError("Cannot cancel a POS that has already been executed to an invoice.")
+
+        pos.status = POS.STATUS_CANCELLED
+        pos.save(update_fields=["status"])
+        return pos
 
     # =========================================================
-    # GET (one POS + its items)
+    # EXECUTE — final invoice step, checks + deducts inventory
+    # =========================================================
+    @staticmethod
+    @transaction.atomic
+    def execute_to_billing(pos_id, organisation_id, organisation_name, billed_by_id=None):
+        from biller_apps.billing.models.customer_bills import CustomerBills
+        from biller_apps.billing.models.billing import Billing
+        from biller_apps.inventory.models import Inventory
+
+        pos = POS.objects.filter(pos_id=pos_id, organisation_id_id=organisation_id).first()
+        if not pos:
+            raise ValueError("POS not found.")
+        if pos.status == POS.STATUS_EXECUTED:
+            raise ValueError("POS has already been executed to an invoice.")
+        if pos.status != POS.STATUS_CONFIRMED:
+            raise ValueError("POS must be confirmed before it can be executed to an invoice.")
+
+        pos_items = list(POSItem.objects.filter(pos_id=pos))
+        if not pos_items:
+            raise ValueError("Cannot execute an empty POS.")
+
+        inventory_rows = {}
+        for pos_item in pos_items:
+            inventory = Inventory.objects.filter(
+                item_id=pos_item.item_id, shop_id=pos.shop_id, organisation_id_id=organisation_id
+            ).first()
+            if not inventory or inventory.balance_qty < pos_item.quantity:
+                available = inventory.balance_qty if inventory else 0
+                raise ValueError(
+                    f"Insufficient stock for item code '{pos_item.item_id.item_code}': "
+                    f"have {available}, need {pos_item.quantity}."
+                )
+            inventory_rows[pos_item.pos_item_id] = inventory
+
+        customer_bills = CustomerBills.objects.create(
+            organisation_id_id=organisation_id,
+            shop_id=pos.shop_id,
+            billed_by_id=billed_by_id or pos.billed_by_id,
+            discounts=pos.discounts,
+            discounts_unit=pos.discounts_unit,
+            wave_off=pos.wave_off,
+            pos_id=pos.pos_id,
+        )
+        customer_bills.bill_number = (
+            ''.join([i[0] for i in organisation_name.split()]) + '_INV_' + str(customer_bills.customer_bills_id)
+        )
+        customer_bills.save()
+
+        for pos_item in pos_items:
+            Billing.objects.create(
+                customer_billing_id=customer_bills,
+                item_id=pos_item.item_id,
+                quantity=pos_item.quantity,
+                total_price=pos_item.total,
+            )
+            inventory = inventory_rows[pos_item.pos_item_id]
+            inventory.balance_qty -= pos_item.quantity
+            inventory.save(update_fields=["balance_qty"])
+
+        pos.status = POS.STATUS_EXECUTED
+        pos.save(update_fields=["status"])
+        return customer_bills
+
+    # =========================================================
+    # GET / GET ALL / DELETE
     # =========================================================
     @staticmethod
     def get(organisation_id, pos_id=None, pos_code=None):
@@ -166,94 +295,25 @@ class POSUtils:
         ))
         return pos, items
 
-    # =========================================================
-    # GET ALL
-    # =========================================================
     @staticmethod
-    def get_all(organisation_id, is_executed=None, ordering="-created_date"):
+    def get_all(organisation_id, status=None, ordering="-created_date"):
         queryset = POS.objects.filter(organisation_id_id=organisation_id)
-        if is_executed is not None:
-            queryset = queryset.filter(is_executed=is_executed)
+        if status:
+            queryset = queryset.filter(status=status)
         queryset = queryset.order_by(ordering)
         return queryset.values(
             "pos_id", "pos_code", "customer__name", "shop_id__shop_code",
-            "payment_type", "amount", "is_executed", "quotation_id", "created_date",
+            "payment_type", "payment_status", "amount", "status",
+            "customer_quotation_id", "created_date",
         )
 
-    # =========================================================
-    # DELETE (whole draft, only if not finalized)
-    # =========================================================
     @staticmethod
     @transaction.atomic
     def delete(pos_id, organisation_id):
         pos = POS.objects.filter(pos_id=pos_id, organisation_id_id=organisation_id).first()
         if not pos:
             raise ValueError("POS not found.")
-        if pos.is_executed:
-            raise ValueError("Cannot delete a finalized POS.")
-        pos.delete()  # cascades to POSItem via on_delete=CASCADE
-        return True
-
-    
-    @staticmethod
-    @transaction.atomic
-    def execute_to_billing(pos_id, organisation_id, billed_by_id=None):
-        pos = POS.objects.filter(pos_id=pos_id, organisation_id_id=organisation_id).first()
-        if not pos:
-            raise ValueError("POS not found.")
-
         if pos.status == POS.STATUS_EXECUTED:
-            raise ValueError("POS has already been executed to an invoice.")
-        if pos.status != POS.STATUS_CONFIRMED:
-            raise ValueError("POS must be confirmed before it can be executed to an invoice.")
-
-        pos_items = list(POSItem.objects.filter(pos_id=pos))
-        if not pos_items:
-            raise ValueError("Cannot execute an empty POS.")
-
-        # Re-check stock at the moment of deduction — not a re-validation of
-        # POSItem data itself, just guards against drift since add_item time.
-        inventory_rows = {}
-        for pos_item in pos_items:
-            inventory = Inventory.objects.filter(
-                item_id=pos_item.item_id, shop_id=pos.shop_id, organisation_id_id=organisation_id
-            ).first()
-            if not inventory or inventory.balance_qty < pos_item.quantity:
-                available = inventory.balance_qty if inventory else 0
-                raise ValueError(
-                    f"Insufficient stock for '{pos_item.item_id.item_code}': "
-                    f"have {available}, need {pos_item.quantity}."
-                )
-            inventory_rows[pos_item.pos_item_id] = inventory
-
-        # Create the invoice header
-        customer_bills = CustomerBills.objects.create(
-            organisation_id_id=organisation_id,
-            shop_id=pos.shop_id,
-            billed_by_id=billed_by_id or (pos.billed_by_id if pos.billed_by_id else None),
-            discounts=pos.discounts,
-            discounts_unit=pos.discounts_unit,
-            wave_off=pos.wave_off,
-            pos_id=pos.pos_id,
-        )
-        customer_bills.bill_number = (
-            'INV_' + str(customer_bills.customer_bills_id)  # scheme still open — see note below
-        )
-        customer_bills.save()
-
-        # Copy each POSItem into a Billing row, and deduct stock
-        for pos_item in pos_items:
-            Billing.objects.create(
-                customer_billing_id=customer_bills,
-                item_id=pos_item.item_id,
-                quantity=pos_item.quantity,
-                total_price=pos_item.total,
-            )
-            inventory = inventory_rows[pos_item.pos_item_id]
-            inventory.balance_qty -= pos_item.quantity
-            inventory.save(update_fields=["balance_qty"])
-
-        pos.status = POS.STATUS_EXECUTED
-        pos.save(update_fields=["status"])
-
-        return customer_bills
+            raise ValueError("Cannot delete a POS that has already been executed to an invoice.")
+        pos.delete()
+        return True
