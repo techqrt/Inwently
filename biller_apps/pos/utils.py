@@ -195,6 +195,7 @@ class POSUtils:
             raise ValueError("Cannot confirm an empty POS.")
 
         pos.status = POS.STATUS_CONFIRMED
+        #pos.confirmed_by = confirmed_by
         pos.save(update_fields=["status"])
         return pos
 

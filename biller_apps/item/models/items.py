@@ -8,6 +8,7 @@ from django.utils import timezone
 from biller_apps.brand.models import Brand
 from biller_apps.category.models import Category
 from biller_apps.common.dataclasses.get_all import GetAll
+#from biller_apps.inventory.models import Inventory
 from biller_apps.organisation.models import Organisation
 from biller_apps.supplier.models import Supplier
 from biller_apps.taxes.models import Taxes
@@ -62,10 +63,8 @@ class Items(models.Model):
         self.save()
         item_code = ''.join([i[0] for i in organisation_name.split()]) + '_' + str(self.item_id)
         self.item_code = item_code
-        if len(bar_qr_code) == 0:
+        if item_code:
             self.code = item_code
-        else:
-            self.code = bar_qr_code
         self.no_of_packets = no_of_packets
         self.sku_code = sku_code
         self.plain_price = plain_price
@@ -125,7 +124,7 @@ class Items(models.Model):
         ItemAttribute.objects.filter(item_id=item_id).delete()
         ItemOtherImage.objects.filter(item_id=item_id).delete()
         Items.objects.get(item_id=item_id).delete()
-
+        #Inventory.objects.filter(item_id=item_id).delete()
     @staticmethod
     def get(organisation_name: str, item_code: str = None, single: bool = False) -> list | dict:
         get_filter = Q(organisation_id__company_name=organisation_name)

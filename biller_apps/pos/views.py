@@ -97,8 +97,8 @@ class POSView:
     @Publish.status_update
     def send_extract(self, params: POSStatusChange, token_payload):
         organisation_id = self._resolve_organisation_id(token_payload.organisationName)
-        employee_id = getattr(token_payload, "employeeId", None)
-        pos = POSUtils.send_to_customer(pos_id=params.pos_id, organisation_id=organisation_id, sent_by=employee_id)
+        #employee_id = self._resolve_billed_by(organisation_id, token_payload)
+        pos = POSUtils.send_to_customer(pos_id=params.pos_id, organisation_id=organisation_id)
         return Response(status=status.HTTP_200_OK, data=Utils.success_response_data(
             message=self.data_sent, data={'pos_id': pos.pos_id, 'status': pos.status}
         ))
@@ -107,7 +107,9 @@ class POSView:
     @Publish.status_update
     def confirm_extract(self, params: POSStatusChange, token_payload):
         organisation_id = self._resolve_organisation_id(token_payload.organisationName)
-        #employee_id = getattr(token_payload, "employeeId", None)
+        #employee_id = self._resolve_billed_by(organisation_id, token_payload)
+       # print(token_payload.employee_code)
+        #print(employee_id)
         pos = POSUtils.confirm(pos_id=params.pos_id, organisation_id=organisation_id)
         return Response(status=status.HTTP_200_OK, data=Utils.success_response_data(
             message=self.data_confirmed, data={'pos_id': pos.pos_id, 'status': pos.status}
@@ -117,7 +119,7 @@ class POSView:
     @Publish.status_update
     def cancel_extract(self, params: POSStatusChange, token_payload):
         organisation_id = self._resolve_organisation_id(token_payload.organisationName)
-        #employee_id = getattr(token_payload, "employeeId", None)
+        #employee_id = self._resolve_billed_by(organisation_id, token_payload)
         pos = POSUtils.cancel(pos_id=params.pos_id, organisation_id=organisation_id)
         return Response(status=status.HTTP_200_OK, data=Utils.success_response_data(
             message=self.data_cancelled, data={'pos_id': pos.pos_id, 'status': pos.status}
@@ -130,13 +132,13 @@ class POSView:
     @Publish.status_update
     def execute_extract(self, params: POSStatusChange, token_payload):
         organisation_id = self._resolve_organisation_id(token_payload.organisationName)
-        #employee_id = getattr(token_payload, "employeeId", None)
+        employee_id = self._resolve_billed_by(organisation_id, token_payload)
 
         customer_bills = POSUtils.execute_to_billing(
             pos_id=params.pos_id,
             organisation_id=organisation_id,
             organisation_name=token_payload.organisationName,
-            #billed_by_id=employee_id,
+            billed_by_id=employee_id,
         )
 
         return Response(status=status.HTTP_200_OK, data=Utils.success_response_data(
@@ -217,3 +219,19 @@ class POSView:
         return Response(status=status.HTTP_200_OK, data=Utils.success_response_data(
             message=self.data_delete, data={}
         ))
+
+    @staticmethod
+    def _resolve_billed_by(organisation_id, token_payload):
+        from biller_apps.employees.models.employees import Employees
+
+        email_id = getattr(token_payload, "email_id", None)
+
+        if not email_id:
+             return None
+
+        employee = Employees.objects.filter(
+            employee_credentials_id__email_id=email_id,
+            organisation_id_id=organisation_id
+        ).first()
+        #print(f"Resolved employee: {employee.employee_id} for email_id: {email_id} and organisation_id: {organisation_id}")
+        return employee.employee_id
