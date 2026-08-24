@@ -95,7 +95,7 @@ class BillingView:
     def get_extract(self, params: BillingGetRequest, token_payload: Payload):
         data = Billing.get(organisation_name=token_payload.organisationName, bill_number=params.bill_number)
         if len(data) == 0:
-            raise ValueError(self.data_match)
+            raise ValueError(self.data_no_match)
         data = json.loads(BillingUtils(columns_required=params.values_list).mapper(data))
         return Response(status=status.HTTP_200_OK,
                         data=Utils.success_response_data(message=self.data_get, data=data))
