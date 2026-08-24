@@ -46,7 +46,7 @@ class POSView:
     @Publish.status_update
     def create_extract(self, params: POSCreate, token_payload):
         organisation_id = self._resolve_organisation_id(token_payload.organisationName)
-        employee_id = getattr(token_payload, "employeeId", None)
+        employee_id = self._resolve_billed_by(organisation_id, token_payload)
 
         pos = POSUtils.create(
             customer_code=params.customer_code,
@@ -70,7 +70,6 @@ class POSView:
     @Publish.status_update
     def update_extract(self, params: POSUpdate, token_payload):
         organisation_id = self._resolve_organisation_id(token_payload.organisationName)
-        employee_id = getattr(token_payload, "employeeId", None)
 
         pos = POSUtils.update(
             pos_id=params.pos_id,
@@ -82,7 +81,6 @@ class POSView:
             discounts_unit=params.discounts_unit,
             wave_off=params.wave_off,
             payment_type=params.payment_type,
-            billed_by=employee_id,
         )
 
         return Response(status=status.HTTP_200_OK, data=Utils.success_response_data(
@@ -146,6 +144,7 @@ class POSView:
             data={
                 'customer_bills_id': customer_bills.customer_bills_id,
                 'bill_number': customer_bills.bill_number,
+                'amount': str(customer_bills.amount),
             }
         ))
 

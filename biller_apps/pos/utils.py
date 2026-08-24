@@ -1,4 +1,6 @@
 # biller_apps/pos/utils.py
+from decimal import Decimal
+
 from django.db import transaction
 from django.db.models import Sum
 
@@ -18,8 +20,14 @@ class POSUtils:
 
     @staticmethod
     def _recalculate_amount(pos: POS) -> None:
-        total = POSItem.objects.filter(pos_id=pos).aggregate(s=Sum('total'))['s'] or 0
-        pos.amount = total
+        subtotal = POSItem.objects.filter(pos_id=pos).aggregate(s=Sum('total'))['s'] or Decimal('0')
+        discounts = Decimal(pos.discounts)
+        wave_off = Decimal(pos.wave_off)
+        if pos.discounts_unit == 'percentage':
+            discount_amount = subtotal * (discounts / Decimal('100'))
+        else:
+            discount_amount = discounts
+        pos.amount = subtotal - discount_amount - wave_off
         pos.save(update_fields=['amount'])
 
     # =========================================================
@@ -51,6 +59,11 @@ class POSUtils:
                 raise ValueError(
                     f"Customer quotation with code '{customer_quotation_code}' does not exist."
                 )
+            if quotation.status != CustomerQuotation.STATUS_PHONE_CONFIRMED:
+                raise ValueError(
+                    f"Customer quotation '{customer_quotation_code}' is in '{quotation.status}' "
+                    f"status and cannot be converted to a Proforma Invoice."
+                )
             customer_quotation_id = quotation.customer_quotation_id
 
         resolved_items = []
@@ -66,7 +79,7 @@ class POSUtils:
             customer=customer,
             shop_id=shop,
             organisation_id_id=organisation_id,
-            billed_by=billed_by,
+            billed_by_id=billed_by,
             customer_quotation_id=customer_quotation_id,
         )
         pos.pos_code = ''.join([i[0] for i in organisation_name.split()]) + '_' + str(pos.pos_id)
@@ -210,6 +223,8 @@ class POSUtils:
 
         pos.status = POS.STATUS_CANCELLED
         pos.save(update_fields=["status"])
+        if pos.customer_quotation_id:
+            CustomerQuotationUtils.revert_to_confirmed(pos.customer_quotation_id, organisation_id)
         return pos
 
     # =========================================================
@@ -218,9 +233,11 @@ class POSUtils:
     @staticmethod
     @transaction.atomic
     def execute_to_billing(pos_id, organisation_id, organisation_name, billed_by_id=None):
+        import uuid
+
         from biller_apps.billing.models.customer_bills import CustomerBills
         from biller_apps.billing.models.billing import Billing
-        from biller_apps.inventory.models import Inventory
+        from biller_apps.inventory.models import Inventory, InventoryLog
 
         pos = POS.objects.filter(pos_id=pos_id, organisation_id_id=organisation_id).first()
         if not pos:
@@ -261,6 +278,7 @@ class POSUtils:
         )
         customer_bills.save()
 
+        batch_id = uuid.uuid4()
         for pos_item in pos_items:
             Billing.objects.create(
                 customer_billing_id=customer_bills,
@@ -271,9 +289,18 @@ class POSUtils:
             inventory = inventory_rows[pos_item.pos_item_id]
             inventory.balance_qty -= pos_item.quantity
             inventory.save(update_fields=["balance_qty"])
+            InventoryLog.objects.create(
+                inventory_id=inventory,
+                inventory_code=inventory.inventory_code,
+                eventtype=InventoryLog.EVENT_SALE_DEDUCT,
+                batch_id=batch_id,
+                status=InventoryLog.STATUS_SUCCESS,
+                bill_number=customer_bills.bill_number,
+            )
 
         pos.status = POS.STATUS_EXECUTED
         pos.save(update_fields=["status"])
+        customer_bills.amount = pos.amount
         return customer_bills
 
     # =========================================================
@@ -316,5 +343,8 @@ class POSUtils:
             raise ValueError("POS not found.")
         if pos.status == POS.STATUS_EXECUTED:
             raise ValueError("Cannot delete a POS that has already been executed to an invoice.")
+        customer_quotation_id = pos.customer_quotation_id
         pos.delete()
+        if customer_quotation_id:
+            CustomerQuotationUtils.revert_to_confirmed(customer_quotation_id, organisation_id)
         return True

@@ -39,11 +39,13 @@ class InventoryLog(models.Model):
     EVENT_UPDATE = "UPDATE"
     EVENT_BULK_CREATE = "BULK_CREATE"
     EVENT_BULK_UPDATE = "BULK_UPDATE"
+    EVENT_SALE_DEDUCT = "SALE_DEDUCT"
     EVENT_CHOICES = [
         (EVENT_CREATE, "Create"),
         (EVENT_UPDATE, "Update"),
         (EVENT_BULK_CREATE, "Bulk Create"),
         (EVENT_BULK_UPDATE, "Bulk Update"),
+        (EVENT_SALE_DEDUCT, "Sale Deduct"),
     ]
 
     STATUS_SUCCESS = "SUCCESS"
@@ -63,6 +65,7 @@ class InventoryLog(models.Model):
     batch_id = models.UUIDField(default=uuid.uuid4, db_index=True)
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=STATUS_SUCCESS)
     error_message = models.CharField(max_length=500, null=True, blank=True)
+    bill_number = models.CharField(max_length=100, null=True, blank=True, default=None)
 
     class Meta:
         db_table = 'inventory_logs'

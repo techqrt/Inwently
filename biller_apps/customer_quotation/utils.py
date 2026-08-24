@@ -47,7 +47,7 @@ class CustomerQuotationUtils:
 
     @staticmethod
     @transaction.atomic
-    def review(customer_quotation_id, organisation_id, status, reviewed_by_id=None):
+    def review(customer_quotation_id, organisation_id, organisation_name, status, reviewed_by_id=None):
         quotation = CustomerQuotation.objects.filter(
             customer_quotation_id=customer_quotation_id, organisation_id_id=organisation_id
         ).first()
@@ -61,7 +61,56 @@ class CustomerQuotationUtils:
         if reviewed_by_id:
             quotation.reviewed_by_id = reviewed_by_id
         quotation.save(update_fields=["status", "reviewed_by"])
-        return quotation
+
+        pos = None
+        if status == CustomerQuotation.STATUS_PHONE_CONFIRMED:
+            pos = CustomerQuotationUtils._auto_create_proforma_invoice(
+                quotation=quotation, organisation_id=organisation_id,
+                organisation_name=organisation_name, billed_by=reviewed_by_id,
+            )
+        return quotation, pos
+
+    @staticmethod
+    def _auto_create_proforma_invoice(quotation, organisation_id, organisation_name, billed_by=None):
+        """Called by review() the moment a quotation becomes phone_confirmed — builds
+        a draft Proforma Invoice (POS) from the quotation's items, using the item
+        master's own price/tax as a starting point for staff to adjust afterward."""
+        from decimal import Decimal
+
+        from biller_apps.customer.models import Customer
+        from biller_apps.pos.dataclasses.request.update import POSItemAddEntry
+        from biller_apps.pos.utils import POSUtils
+
+        customer = Customer.objects.filter(
+            mobile_number=quotation.customer_phone, organisation_id_id=organisation_id
+        ).first()
+        if not customer:
+            raise ValueError(
+                f"No customer profile found for phone '{quotation.customer_phone}'. "
+                "Link or create the customer record before confirming this quotation."
+            )
+
+        items = []
+        for line in CustomerQuotationItem.objects.filter(customer_quotation_id=quotation):
+            item = line.item_id
+            price = item.plain_price or Decimal('0')
+            tax_amount = Decimal('0')
+            if item.tax_code_id:
+                tax_amount = (price * Decimal(str(item.tax_code.total_tax))) / Decimal('100')
+            items.append(POSItemAddEntry(
+                item_code=item.item_code, quantity=line.quantity,
+                price=price, tax=tax_amount, discount=Decimal('0'),
+            ))
+
+        return POSUtils.create(
+            customer_code=customer.customer_code,
+            shop_code=quotation.shop_id.shop_code,
+            organisation_id=organisation_id,
+            organisation_name=organisation_name,
+            items=items,
+            billed_by=billed_by,
+            customer_quotation_code=quotation.customer_quotation_code,
+        )
 
     @staticmethod
     def get(organisation_id, customer_quotation_id=None, customer_quotation_code=None):
@@ -95,3 +144,13 @@ class CustomerQuotationUtils:
         CustomerQuotation.objects.filter(
             customer_quotation_id=customer_quotation_id, organisation_id_id=organisation_id
         ).update(status=CustomerQuotation.STATUS_CONVERTED)
+
+    @staticmethod
+    def revert_to_confirmed(customer_quotation_id, organisation_id):
+        """Called by POSUtils when the POS created from this quotation is cancelled or
+        deleted before execution, so the quotation doesn't stay stranded as 'converted'
+        with no resulting sale — reopens it for a fresh POS to be created."""
+        CustomerQuotation.objects.filter(
+            customer_quotation_id=customer_quotation_id, organisation_id_id=organisation_id,
+            status=CustomerQuotation.STATUS_CONVERTED,
+        ).update(status=CustomerQuotation.STATUS_PHONE_CONFIRMED)

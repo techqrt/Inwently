@@ -23,6 +23,20 @@ class CustomerQuotationView:
             raise ValueError("No matching organisation found")
         return organisation['organisation_id']
 
+    @staticmethod
+    def _resolve_reviewed_by(organisation_id, token_payload):
+        from biller_apps.employees.models.employees import Employees
+
+        email_id = getattr(token_payload, "email_id", None)
+        if not email_id:
+            return None
+
+        employee = Employees.objects.filter(
+            employee_credentials_id__email_id=email_id,
+            organisation_id_id=organisation_id
+        ).first()
+        return employee.employee_id if employee else None
+
     
 
     @Common().exception_handler
@@ -47,16 +61,20 @@ class CustomerQuotationView:
     @Publish.status_update
     def review_extract(self, params, token_payload):
         organisation_id = self._resolve_organisation_id(token_payload.organisationName)
-        employee_id = getattr(token_payload, "employeeId", None)
-        quotation = CustomerQuotationUtils.review(
+        employee_id = self._resolve_reviewed_by(organisation_id, token_payload)
+        quotation, pos = CustomerQuotationUtils.review(
             customer_quotation_id=params.customer_quotation_id,
             organisation_id=organisation_id,
+            organisation_name=token_payload.organisationName,
             status=params.status,
             reviewed_by_id=employee_id,
         )
+        data = {'customer_quotation_id': quotation.customer_quotation_id, 'status': quotation.status}
+        if pos:
+            data['pos_id'] = pos.pos_id
+            data['pos_code'] = pos.pos_code
         return Response(status=status.HTTP_200_OK, data=Utils.success_response_data(
-            message=self.data_review, data={'customer_quotation_id': quotation.customer_quotation_id,
-                                             'status': quotation.status}))
+            message=self.data_review, data=data))
     
     @Common().exception_handler
     def get_extract(self, params, token_payload):

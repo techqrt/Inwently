@@ -1,5 +1,6 @@
 import jwt
 import pandas
+from django.db import OperationalError
 from rest_framework import status
 from rest_framework.response import Response
 
@@ -18,6 +19,7 @@ class Common:
         self.file_error = "File Error"
         self.token_error = "Unauthorized"
         self.foreign_key_error = "It is not possible to delete this record as it is connected with other records"
+        self.retry_error = "The system is busy processing another request. Please retry."
         self.response_handler = response_handler
 
 
@@ -52,6 +54,10 @@ class Common:
                                 data=Utils.error_response_data(message=self.token_error,
                                                                error=["Signature Verification Error",
                                                                       "You have logged into another device"]))
+            except OperationalError as e:
+                return Response(status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                                data=Utils.error_response_data(error=[self.retry_error],
+                                                               message=self.retry_error))
             except Exception as e:
                 if 'foreign key constraint' in str(e):
                     return Response(status=status.HTTP_400_BAD_REQUEST,
