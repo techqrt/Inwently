@@ -93,10 +93,51 @@ class BillingView:
 
     @Common().exception_handler
     def get_extract(self, params: BillingGetRequest, token_payload: Payload):
-        data = Billing.get(organisation_name=token_payload.organisationName, bill_number=params.bill_number)
-        if len(data) == 0:
+        from decimal import Decimal
+        from biller_apps.billing.models.customer_bills import CustomerBills
+
+        customer_bills = CustomerBills.objects.filter(
+            organisation_id__company_name=token_payload.organisationName, bill_number=params.bill_number
+        ).values(
+            'customer_bills_id', 'bill_number', 'created_at', 'discounts', 'discounts_unit', 'wave_off',
+            'billed_by__employee_code', 'shop_id__shop_code',
+        ).first()
+        if not customer_bills:
             raise ValueError(self.data_no_match)
-        data = json.loads(BillingUtils(columns_required=params.values_list).mapper(data))
+
+        items = list(Billing.objects.filter(
+            customer_billing_id__bill_number=params.bill_number,
+            customer_billing_id__organisation_id__company_name=token_payload.organisationName,
+        ).values('item_id__item_code', 'item_id__name', 'quantity', 'total_price'))
+
+        subtotal = sum((Decimal(str(item['total_price'])) for item in items), Decimal('0'))
+        discounts = Decimal(str(customer_bills['discounts']))
+        wave_off = Decimal(str(customer_bills['wave_off']))
+        if customer_bills['discounts_unit'] == 'percentage':
+            discount_amount = subtotal * (discounts / Decimal('100'))
+        else:
+            discount_amount = discounts
+        amount = subtotal - discount_amount - wave_off
+
+        data = {
+            'customer_bills_id': customer_bills['customer_bills_id'],
+            'bill_number': customer_bills['bill_number'],
+            'shop_code': customer_bills['shop_id__shop_code'],
+            'billed_by': customer_bills['billed_by__employee_code'],
+            'discounts': str(discounts),
+            'discounts_unit': customer_bills['discounts_unit'],
+            'wave_off': str(wave_off),
+            'amount': str(amount.quantize(Decimal('0.01'))),
+            'created_at': customer_bills['created_at'].strftime('%Y-%m-%d %H:%M:%S'),
+            'items': [
+                {
+                    'item_code': item['item_id__item_code'],
+                    'item_name': item['item_id__name'],
+                    'quantity': item['quantity'],
+                    'total_price': item['total_price'],
+                } for item in items
+            ],
+        }
         return Response(status=status.HTTP_200_OK,
                         data=Utils.success_response_data(message=self.data_get, data=data))
 
