@@ -78,13 +78,59 @@ class BillingView:
 
     @Common().exception_handler
     def get_all_extract(self, params: GetAll, token_payload: Payload) -> Response:
-        pages = Paginator(Billing.get_annotate_sum_total_price(organisation_name=token_payload.organisationName),
-                          params.limit)
+        from decimal import Decimal
+        from django.db.models import Sum
+        from biller_apps.billing.models.customer_bills import CustomerBills
+        from biller_apps.pos.models import POS
+
+        queryset = CustomerBills.objects.filter(
+            organisation_id__company_name=token_payload.organisationName
+        ).order_by('-created_at').values(
+            'customer_bills_id', 'bill_number', 'created_at', 'discounts', 'discounts_unit', 'wave_off',
+            'pos_id', 'shop_id__shop_code',
+        )
+
+        pages = Paginator(queryset, params.limit)
         if pages.num_pages < params.page_num:
             raise ValueError(Constants.page_num_exceeded)
-        data = pages.page(params.page_num)
-        data = json.loads(BillingUtils(columns_required=params.values_list).mapper(data))
-        data = Utils.add_page_parameter(final_data=data, page_num=params.page_num,
+        page_bills = list(pages.page(params.page_num))
+
+        bill_numbers = [bill['bill_number'] for bill in page_bills]
+        line_sums = {
+            row['customer_billing_id__bill_number']: row['total_price']
+            for row in Billing.objects.filter(customer_billing_id__bill_number__in=bill_numbers).values(
+                'customer_billing_id__bill_number'
+            ).annotate(total_price=Sum('total_price'))
+        }
+
+        pos_ids = [bill['pos_id'] for bill in page_bills if bill['pos_id']]
+        pos_lookup = {
+            row['pos_id']: row
+            for row in POS.objects.filter(pos_id__in=pos_ids).values('pos_id', 'pos_code', 'customer__name')
+        }
+
+        result = []
+        for bill in page_bills:
+            subtotal = Decimal(str(line_sums.get(bill['bill_number'], 0)))
+            discounts = Decimal(str(bill['discounts']))
+            wave_off = Decimal(str(bill['wave_off']))
+            if bill['discounts_unit'] == 'percentage':
+                discount_amount = subtotal * (discounts / Decimal('100'))
+            else:
+                discount_amount = discounts
+            total_price = subtotal - discount_amount - wave_off
+
+            pos_info = pos_lookup.get(bill['pos_id'], {})
+            result.append({
+                'createdAt': bill['created_at'].strftime('%Y-%m-%d %H:%M:%S'),
+                'billNumber': bill['bill_number'],
+                'totalPrice': float(total_price.quantize(Decimal('0.01'))),
+                'customerName': pos_info.get('customer__name'),
+                'shopCode': bill['shop_id__shop_code'],
+                'posCode': pos_info.get('pos_code'),
+            })
+
+        data = Utils.add_page_parameter(final_data=result, page_num=params.page_num,
                                         present_url=token_payload.present_url, total_page=pages.num_pages,
                                         total_count=pages.count,
                                         next_page_required=True if pages.num_pages != params.page_num else False)
