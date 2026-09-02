@@ -9,7 +9,12 @@ class POSGetAllSerializer(serializers.Serializer):
     page_num = serializers.IntegerField(min_value=1, default=1)
     limit = serializers.IntegerField(min_value=1, max_value=100, default=20)
     status = serializers.ChoiceField(
-        choices=["draft", "sent_to_customer", "confirmed", "cancelled", "executed"],
+        choices=[
+            "draft", "sent_to_customer", "confirmed",
+            "inventory_pending", "inventory_confirmed",
+            "dispatch_pending", "dispatch_confirmed",
+            "ready_for_execution", "cancelled", "executed",
+        ],
         required=False,
     )
     sort_by = serializers.ChoiceField(choices=["created_date", "amount"], default="created_date")
