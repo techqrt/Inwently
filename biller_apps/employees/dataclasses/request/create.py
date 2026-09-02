@@ -33,6 +33,10 @@ class PurchasePermission:
     return_purchase: bool
     stock: bool
 
+@dataclass
+class DispatchPermission:
+    dispatch: bool
+
 
 @dataclass
 class PermissionsReports:
@@ -58,6 +62,7 @@ class Permissions:
     dashboard: PermissionsDashboard
     stock: PurchasePermission
     quotations: QuotationsPermission
+    dispatch: DispatchPermission
 
 
 @dataclass

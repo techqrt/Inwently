@@ -44,6 +44,10 @@ class PermissionsRequestQuotationsSerializer(serializers.Serializer):
     quotations = serializers.BooleanField()
 
 
+class PermissionsRequestDispatchSerializer(serializers.Serializer):
+    dispatch = serializers.BooleanField()
+
+
 class PermissionsRequestPrinterTemplatesSerializer(serializers.Serializer):
     printer_templates = serializers.BooleanField()
 
@@ -57,6 +61,7 @@ class PermissionsRequestSerializer(serializers.Serializer):
     dashboard = PermissionsRequestDashboardSerializer()
     stock = PermissionsRequestStockSerializer()
     quotations = PermissionsRequestQuotationsSerializer()
+    dispatch = PermissionsRequestDispatchSerializer()
 
 
 class EmployeesRequestSerializer(serializers.Serializer):

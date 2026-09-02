@@ -49,14 +49,15 @@ class AuthView:
     def generate_new_token(self, payload: dict, user_data: dict, token_key: str, user_specific_data: dict):
         user_specific = AuthUtils.mapper(user_specific_data)
         permissions_data = AuthUtils.permission_mapper(user_specific_data)
+        role = AuthUtils.resolve_role(permissions_data)
 
         access_token = self.generate_token(token_key=token_key, user_specific_data=user_specific,
-                                           permissions=permissions_data,
+                                           permissions=permissions_data, role=role,
 
                                            expiry=datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(
                                                minutes=self.access_token_expiry_min))
         Employees.update_access_token(employee_id=user_data['employee_id'], access_token=access_token)
-        data = {'access_token': access_token}
+        data = {'access_token': access_token, 'role': role}
         response_data = Utils.success_response_data(message=Constants.auth_success, data=data)
         return Response(response_data, status.HTTP_200_OK)
 
@@ -106,7 +107,8 @@ class AuthView:
             if expiry_time > present_time and user_data['refresh_token'] == refresh_token:
                 return Response(status=status.HTTP_200_OK,
                                 data=Utils.success_response_data(message=Constants.auth_success,
-                                                                 data={'access_token': user_data['access_token']}))
+                                                                 data={'access_token': user_data['access_token'],
+                                                                       'role': payload.get('role', 'EMPLOYEE')}))
 
         # return a new access token
         if user_data['refresh_token'] == refresh_token:
@@ -142,20 +144,22 @@ class AuthView:
         user_specific_data = AuthUtils.mapper(user_data)
 
         permissions_data = AuthUtils.permission_mapper(user_data)
+        role = AuthUtils.resolve_role(permissions_data)
 
         access_token = self.generate_token(token_key=token_key, user_specific_data=user_specific_data,
-                                           permissions=permissions_data,
+                                           permissions=permissions_data, role=role,
                                            expiry=datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(
                                                minutes=self.access_token_expiry_min))
 
         refresh_token = self.generate_token(token_key=token_key, user_specific_data=user_specific_data,
-                                            permissions=permissions_data,
+                                            permissions=permissions_data, role=role,
                                             expiry=datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(
                                                 days=self.refresh_token_expiry_day))
 
         payload['access_token'] = access_token
         payload['refresh_token'] = refresh_token
         payload['employee_code'] = user_data['employee_code']
+        payload['role'] = role
         Employees.update_tokens(employee_id=user_data['employee_id'], access_token=access_token,
                                 refresh_token=refresh_token, token_key=token_key)
 
@@ -182,7 +186,8 @@ class AuthView:
         organisation_payload = Payload(
             email_id=params.email_id, expiry='', organisationName=params.organisation_name,
             organisation_id=organisation_data['organisation_id'], present_url='', access_token='',
-            method='', path='', approval=False, permissions=params.permissions)
+            method='', path='', approval=False, permissions=params.permissions,
+            role=AuthUtils.resolve_role(params.permissions))
 
         return EmployeesView().create_extract(params=employees_request, token_payload=organisation_payload,
                                               host=request.get_host(), password=params.password)
@@ -197,9 +202,10 @@ class AuthView:
 
     @staticmethod
     def generate_token(token_key: str, expiry: datetime.datetime, user_specific_data: UserSpecificData = None,
-                       permissions: Permissions = None) -> str:
+                       permissions: Permissions = None, role: str = AuthUtils.ROLE_EMPLOYEE) -> str:
         expiry = expiry.strftime('%Y-%m-%d %H:%M:%S.%f%z')
-        payload = asdict(TokenPayload(expiry=expiry, user_specific_data=user_specific_data, permissions=permissions))
+        payload = asdict(TokenPayload(expiry=expiry, user_specific_data=user_specific_data,
+                                      permissions=permissions, role=role))
         token = jwt.encode(payload=payload, key=token_key, algorithm='HS256')
         return token
 

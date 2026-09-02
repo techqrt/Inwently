@@ -44,6 +44,7 @@ class EmployeeUtils:
             'reports_permission__administration': 'permissions.reports.administration',
             'reports_permission__day_book': 'permissions.reports.day_book',
             'reports_permission__gst': 'permissions.reports.gst',
+            'dispatch_permission__dispatch': 'permissions.dispatch.dispatch',
             'organisation_id__company_name':'organisationName'
         }
 
@@ -85,6 +86,9 @@ class EmployeeUtils:
         },
         'printerTemplates': {
             'printerTemplates': row['permissions.printer_templates.printer_templates']
+        },
+        'dispatch': {
+            'dispatch': row['permissions.dispatch.dispatch']
         }
     }
 
@@ -104,7 +108,8 @@ class EmployeeUtils:
                                 'permissions.reports.gst','permissions.dashboard.dashboard',
                                 'permissions.stock.stock','permissions.stock.purchase_list',
                                 'permissions.stock.return_purchase','permissions.quotations.quotations',
-                                'permissions.printer_templates.printer_templates'],
+                                'permissions.printer_templates.printer_templates',
+                                'permissions.dispatch.dispatch'],
                        inplace=True)
         if 'dob' in self.columns_required:
             dataframe['dob'] = pandas.to_datetime(dataframe['dob'])

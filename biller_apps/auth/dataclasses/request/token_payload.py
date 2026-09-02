@@ -16,3 +16,4 @@ class Payload:
     path: str
     approval: bool
     permissions: Permissions
+    role: str = 'EMPLOYEE'

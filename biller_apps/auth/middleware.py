@@ -15,7 +15,7 @@ from biller_apps.common.app_logger import Logger
 from biller_apps.common.utils import Utils
 from biller_apps.employees.dataclasses.request.create import Permissions, PermissionsDashboard, PermissionsInventory, \
     PermissionsMaster, PermissionsReports, PrinterTemplatesPermission, SalesPermission, PurchasePermission, \
-    QuotationsPermission
+    QuotationsPermission, DispatchPermission
 
 
 class AuthenticationMiddleware:
@@ -73,7 +73,8 @@ class AuthenticationMiddleware:
                                       present_url=request.build_absolute_uri(),
                                       access_token=access_token, method=request.method, path=request.path,
                                       approval=payload['user_specific_data']['approval'],
-                                      permissions=permissions)
+                                      permissions=permissions,
+                                      role=payload.get('role', 'EMPLOYEE'))
 
             return self.response_handler(request=request)
 
@@ -94,7 +95,8 @@ class AuthenticationMiddleware:
             'reports': permissions['reports'],
             'dashboard': permissions['dashboard'],
             'stock': permissions['stock'],
-            'quotations': permissions['stock']
+            'quotations': permissions['stock'],
+            'dispatch': permissions['dispatch']
         }
 
         # Iterate over the dictionary to check if the user has the required permissions
@@ -146,6 +148,9 @@ def map_permissions_from_payload(payload_permissions):
         ),
         quotations=QuotationsPermission(
             quotations=payload_permissions['quotations']['quotations']
+        ),
+        dispatch=DispatchPermission(
+            dispatch=payload_permissions['dispatch']['dispatch']
         )
     )
 

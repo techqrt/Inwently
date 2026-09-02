@@ -106,6 +106,34 @@ class InventoryPermission(models.Model):
         InventoryPermission.objects.get(permission_id=permission_id).delete()
 
 
+class DispatchPermission(models.Model):
+    permission_id = models.AutoField(primary_key=True)
+    dispatch = models.BooleanField(default=False, null=True)
+
+    class Meta:
+        db_table = 'dispatch_permissions'
+
+    def create(self, dispatch: bool):
+        self.dispatch = dispatch
+        self.save()
+        return self.permission_id
+
+    @staticmethod
+    def update(permission_id: int, dispatch: bool):
+
+        instance = DispatchPermission.objects.get(permission_id=permission_id)
+
+        instance.dispatch = dispatch
+
+        instance.save()
+
+        return instance.permission_id
+
+    @staticmethod
+    def remove(permission_id: int) -> None:
+        DispatchPermission.objects.get(permission_id=permission_id).delete()
+
+
 class SalesPermission(models.Model):
     permission_id = models.AutoField(primary_key=True)
     pos = models.BooleanField(default=False, null=True)

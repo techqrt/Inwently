@@ -7,6 +7,7 @@ from biller_apps.common.serializer_validations import SerializerValidations
 from biller_apps.pos.serializers.request.create import POSCreateSerializer
 from biller_apps.pos.serializers.request.update import POSUpdateSerializer
 from biller_apps.pos.serializers.request.status_change import POSStatusChangeSerializer
+from biller_apps.pos.serializers.request.dispatch_details import POSDispatchDetailsSerializer
 from biller_apps.pos.serializers.request.get import POSGetSerializer
 from biller_apps.pos.serializers.request.get_all import POSGetAllSerializer
 from biller_apps.pos.serializers.request.delete import POSDeleteSerializer
@@ -61,7 +62,34 @@ class POSViewController:
         return POSView().cancel_extract(params=request.params, token_payload=request.payload)
 
     @extend_schema(
-        description="Execute a confirmed POS into the final invoice (checks and deducts inventory)",
+        description="Inventory team confirms stock for a POS (checks and deducts inventory)",
+        request=POSStatusChangeSerializer,
+    )
+    @api_view(['PUT'])
+    @SerializerValidations(serializer=POSStatusChangeSerializer).validate
+    def inventory_confirm(request: Request) -> Response:
+        return POSView().inventory_confirm_extract(params=request.params, token_payload=request.payload)
+
+    @extend_schema(
+        description="Dispatch team adds logistics company and charges for a POS",
+        request=POSDispatchDetailsSerializer,
+    )
+    @api_view(['PUT'])
+    @SerializerValidations(serializer=POSDispatchDetailsSerializer).validate
+    def dispatch_add_details(request: Request) -> Response:
+        return POSView().dispatch_add_details_extract(params=request.params, token_payload=request.payload)
+
+    @extend_schema(
+        description="Dispatch team confirms dispatch for a POS, making it ready for execution",
+        request=POSStatusChangeSerializer,
+    )
+    @api_view(['PUT'])
+    @SerializerValidations(serializer=POSStatusChangeSerializer).validate
+    def dispatch_confirm(request: Request) -> Response:
+        return POSView().dispatch_confirm_extract(params=request.params, token_payload=request.payload)
+
+    @extend_schema(
+        description="Execute a POS that has completed inventory and dispatch confirmation into the final invoice",
         request=POSStatusChangeSerializer,
     )
     @api_view(['POST'])

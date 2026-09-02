@@ -3,13 +3,14 @@ from decimal import Decimal
 
 from django.db import transaction
 from django.db.models import Sum
+from django.utils import timezone
 
 from biller_apps.customer.models import Customer
 from biller_apps.customer_quotation.models import CustomerQuotation
 from biller_apps.customer_quotation.utils import CustomerQuotationUtils
 from biller_apps.item.models.items import Items
 from biller_apps.shops.models import Shops
-from biller_apps.pos.models import POS, POSItem
+from biller_apps.pos.models import POS, POSItem, POSDispatch
 
 
 class POSUtils:
@@ -207,19 +208,170 @@ class POSUtils:
         if not POSItem.objects.filter(pos_id=pos).exists():
             raise ValueError("Cannot confirm an empty POS.")
 
-        pos.status = POS.STATUS_CONFIRMED
-        #pos.confirmed_by = confirmed_by
+        # Admin confirmation no longer generates the invoice directly — it hands the
+        # PI off to the Inventory team's queue instead of executing immediately.
+        pos.status = POS.STATUS_INVENTORY_PENDING
         pos.save(update_fields=["status"])
         return pos
 
     @staticmethod
     @transaction.atomic
-    def cancel(pos_id, organisation_id):
+    def inventory_confirm(pos_id, organisation_id, confirmed_by_id=None):
+        import uuid
+
+        from django.db.models import F
+
+        from biller_apps.inventory.models import Inventory, InventoryLog
+
+        pos = POS.objects.select_for_update().filter(
+            pos_id=pos_id, organisation_id_id=organisation_id
+        ).first()
+        if not pos:
+            raise ValueError("POS not found.")
+        # STATUS_CONFIRMED accepted here too, as a bridge for PIs confirmed before this
+        # workflow existed — they must still pass through inventory confirmation.
+        if pos.status not in (POS.STATUS_INVENTORY_PENDING, POS.STATUS_CONFIRMED):
+            raise ValueError(f"Cannot confirm inventory for a POS in '{pos.status}' status.")
+
+        pos_items = list(POSItem.objects.filter(pos_id=pos))
+        if not pos_items:
+            raise ValueError("Cannot confirm inventory for an empty POS.")
+
+        # This is the deduction step moved from execute_to_billing — same
+        # InventoryLog(SALE_DEDUCT) semantics, now backed by an atomic
+        # conditional update instead of a read-modify-write, so concurrent
+        # confirmations can no longer race past the stock check together.
+        batch_id = uuid.uuid4()
+        for pos_item in pos_items:
+            updated = Inventory.objects.filter(
+                item_id=pos_item.item_id, shop_id=pos.shop_id, organisation_id_id=organisation_id,
+                balance_qty__gte=pos_item.quantity,
+            ).update(balance_qty=F('balance_qty') - pos_item.quantity)
+
+            if updated == 0:
+                inventory = Inventory.objects.filter(
+                    item_id=pos_item.item_id, shop_id=pos.shop_id, organisation_id_id=organisation_id
+                ).first()
+                available = inventory.balance_qty if inventory else 0
+                raise ValueError(
+                    f"Insufficient stock for item code '{pos_item.item_id.item_code}': "
+                    f"have {available}, need {pos_item.quantity}."
+                )
+
+            inventory = Inventory.objects.get(
+                item_id=pos_item.item_id, shop_id=pos.shop_id, organisation_id_id=organisation_id
+            )
+            InventoryLog.objects.create(
+                inventory_id=inventory,
+                inventory_code=inventory.inventory_code,
+                eventtype=InventoryLog.EVENT_SALE_DEDUCT,
+                batch_id=batch_id,
+                status=InventoryLog.STATUS_SUCCESS,
+                bill_number=pos.pos_code,
+            )
+
+        pos.inventory_confirmed_by_id = confirmed_by_id
+        pos.inventory_confirmed_at = timezone.now()
+        pos.status = POS.STATUS_DISPATCH_PENDING
+        pos.save(update_fields=["inventory_confirmed_by", "inventory_confirmed_at", "status"])
+        return pos
+
+    @staticmethod
+    @transaction.atomic
+    def dispatch_add_details(pos_id, organisation_id, logistics_company, logistics_charges, added_by_id=None):
         pos = POS.objects.filter(pos_id=pos_id, organisation_id_id=organisation_id).first()
+        if not pos:
+            raise ValueError("POS not found.")
+        if pos.status != POS.STATUS_DISPATCH_PENDING:
+            raise ValueError(f"Cannot add dispatch details to a POS in '{pos.status}' status.")
+
+        dispatch_details, _ = POSDispatch.objects.update_or_create(
+            pos_id=pos,
+            defaults={
+                "logistics_company": logistics_company,
+                "logistics_charges": logistics_charges,
+                "added_by_id": added_by_id,
+            },
+        )
+        return dispatch_details
+
+    @staticmethod
+    @transaction.atomic
+    def dispatch_confirm(pos_id, organisation_id, confirmed_by_id=None):
+        pos = POS.objects.select_for_update().filter(
+            pos_id=pos_id, organisation_id_id=organisation_id
+        ).first()
+        if not pos:
+            raise ValueError("POS not found.")
+        if pos.status != POS.STATUS_DISPATCH_PENDING:
+            raise ValueError(f"Cannot confirm dispatch for a POS in '{pos.status}' status.")
+
+        dispatch_details = POSDispatch.objects.filter(pos_id=pos).first()
+        if not dispatch_details or not dispatch_details.logistics_company:
+            raise ValueError("Dispatch details must be added before dispatch can be confirmed.")
+
+        pos.dispatch_confirmed_by_id = confirmed_by_id
+        pos.dispatch_confirmed_at = timezone.now()
+        pos.status = POS.STATUS_READY_FOR_EXECUTION
+        pos.save(update_fields=["dispatch_confirmed_by", "dispatch_confirmed_at", "status"])
+        return pos
+
+    @staticmethod
+    @transaction.atomic
+    def cancel(pos_id, organisation_id):
+        import uuid
+
+        from django.db.models import F
+
+        from biller_apps.inventory.models import Inventory, InventoryLog
+
+        pos = POS.objects.select_for_update().filter(
+            pos_id=pos_id, organisation_id_id=organisation_id
+        ).first()
         if not pos:
             raise ValueError("POS not found.")
         if pos.status == POS.STATUS_EXECUTED:
             raise ValueError("Cannot cancel a POS that has already been executed to an invoice.")
+        if pos.status == POS.STATUS_CANCELLED:
+            raise ValueError("POS is already cancelled.")
+
+        # inventory_confirmed_at is only ever set once, at the point stock was
+        # deducted (see inventory_confirm) — it's a more reliable "was stock
+        # already taken?" signal than the current status string.
+        if pos.inventory_confirmed_at is not None:
+            pos_items = list(POSItem.objects.filter(pos_id=pos))
+            batch_id = uuid.uuid4()
+            for pos_item in pos_items:
+                updated = Inventory.objects.filter(
+                    item_id=pos_item.item_id, shop_id=pos.shop_id, organisation_id_id=organisation_id,
+                ).update(balance_qty=F('balance_qty') + pos_item.quantity)
+
+                if updated == 0:
+                    InventoryLog.objects.create(
+                        inventory_id=None,
+                        inventory_code=None,
+                        eventtype=InventoryLog.EVENT_SALE_REVERSAL,
+                        batch_id=batch_id,
+                        status=InventoryLog.STATUS_FAILED,
+                        error_message=(
+                            f"Inventory row for item code '{pos_item.item_id.item_code}' no longer exists; "
+                            f"stock reversal for cancelled POS '{pos.pos_code}' could not be applied."
+                        ),
+                        bill_number=pos.pos_code,
+                    )
+                    continue
+
+                inventory = Inventory.objects.get(
+                    item_id=pos_item.item_id, shop_id=pos.shop_id, organisation_id_id=organisation_id
+                )
+                InventoryLog.objects.create(
+                    inventory_id=inventory,
+                    inventory_code=inventory.inventory_code,
+                    eventtype=InventoryLog.EVENT_SALE_REVERSAL,
+                    batch_id=batch_id,
+                    status=InventoryLog.STATUS_SUCCESS,
+                    bill_number=pos.pos_code,
+                )
 
         pos.status = POS.STATUS_CANCELLED
         pos.save(update_fields=["status"])
@@ -228,41 +380,29 @@ class POSUtils:
         return pos
 
     # =========================================================
-    # EXECUTE — final invoice step, checks + deducts inventory
+    # EXECUTE — final invoice step. Inventory has already been checked
+    # and deducted at inventory_confirm(); this step only generates the
+    # final invoice from a PI that has completed the full workflow.
     # =========================================================
     @staticmethod
     @transaction.atomic
     def execute_to_billing(pos_id, organisation_id, organisation_name, billed_by_id=None):
-        import uuid
-
         from biller_apps.billing.models.customer_bills import CustomerBills
         from biller_apps.billing.models.billing import Billing
-        from biller_apps.inventory.models import Inventory, InventoryLog
 
         pos = POS.objects.filter(pos_id=pos_id, organisation_id_id=organisation_id).first()
         if not pos:
             raise ValueError("POS not found.")
         if pos.status == POS.STATUS_EXECUTED:
             raise ValueError("POS has already been executed to an invoice.")
-        if pos.status != POS.STATUS_CONFIRMED:
-            raise ValueError("POS must be confirmed before it can be executed to an invoice.")
+        if pos.status != POS.STATUS_READY_FOR_EXECUTION:
+            raise ValueError(
+                "POS must complete inventory and dispatch confirmation before it can be executed to an invoice."
+            )
 
         pos_items = list(POSItem.objects.filter(pos_id=pos))
         if not pos_items:
             raise ValueError("Cannot execute an empty POS.")
-
-        inventory_rows = {}
-        for pos_item in pos_items:
-            inventory = Inventory.objects.filter(
-                item_id=pos_item.item_id, shop_id=pos.shop_id, organisation_id_id=organisation_id
-            ).first()
-            if not inventory or inventory.balance_qty < pos_item.quantity:
-                available = inventory.balance_qty if inventory else 0
-                raise ValueError(
-                    f"Insufficient stock for item code '{pos_item.item_id.item_code}': "
-                    f"have {available}, need {pos_item.quantity}."
-                )
-            inventory_rows[pos_item.pos_item_id] = inventory
 
         customer_bills = CustomerBills.objects.create(
             organisation_id_id=organisation_id,
@@ -278,24 +418,12 @@ class POSUtils:
         )
         customer_bills.save()
 
-        batch_id = uuid.uuid4()
         for pos_item in pos_items:
             Billing.objects.create(
                 customer_billing_id=customer_bills,
                 item_id=pos_item.item_id,
                 quantity=pos_item.quantity,
                 total_price=pos_item.total,
-            )
-            inventory = inventory_rows[pos_item.pos_item_id]
-            inventory.balance_qty -= pos_item.quantity
-            inventory.save(update_fields=["balance_qty"])
-            InventoryLog.objects.create(
-                inventory_id=inventory,
-                inventory_code=inventory.inventory_code,
-                eventtype=InventoryLog.EVENT_SALE_DEDUCT,
-                batch_id=batch_id,
-                status=InventoryLog.STATUS_SUCCESS,
-                bill_number=customer_bills.bill_number,
             )
 
         pos.status = POS.STATUS_EXECUTED

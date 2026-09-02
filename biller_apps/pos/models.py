@@ -13,12 +13,22 @@ class POS(models.Model):
     STATUS_DRAFT = 'draft'
     STATUS_SENT_TO_CUSTOMER = 'sent_to_customer'
     STATUS_CONFIRMED = 'confirmed'
+    STATUS_INVENTORY_PENDING = 'inventory_pending'
+    STATUS_INVENTORY_CONFIRMED = 'inventory_confirmed'
+    STATUS_DISPATCH_PENDING = 'dispatch_pending'
+    STATUS_DISPATCH_CONFIRMED = 'dispatch_confirmed'
+    STATUS_READY_FOR_EXECUTION = 'ready_for_execution'
     STATUS_CANCELLED = 'cancelled'
     STATUS_EXECUTED = 'executed'
     STATUS_CHOICES = [
         (STATUS_DRAFT, 'Draft'),
         (STATUS_SENT_TO_CUSTOMER, 'Sent to Customer'),
         (STATUS_CONFIRMED, 'Confirmed'),
+        (STATUS_INVENTORY_PENDING, 'Inventory Pending'),
+        (STATUS_INVENTORY_CONFIRMED, 'Inventory Confirmed'),
+        (STATUS_DISPATCH_PENDING, 'Dispatch Pending'),
+        (STATUS_DISPATCH_CONFIRMED, 'Dispatch Confirmed'),
+        (STATUS_READY_FOR_EXECUTION, 'Ready for Execution'),
         (STATUS_CANCELLED, 'Cancelled'),
         (STATUS_EXECUTED, 'Executed'),
     ]
@@ -48,9 +58,27 @@ class POS(models.Model):
     wave_off = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_DRAFT)
     created_date = models.DateTimeField(default=timezone.now)
+    inventory_confirmed_by = models.ForeignKey(
+        Employees, on_delete=models.DO_NOTHING, null=True, blank=True, related_name='+')
+    inventory_confirmed_at = models.DateTimeField(null=True, blank=True)
+    dispatch_confirmed_by = models.ForeignKey(
+        Employees, on_delete=models.DO_NOTHING, null=True, blank=True, related_name='+')
+    dispatch_confirmed_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         db_table = 'pos'
+
+
+class POSDispatch(models.Model):
+    dispatch_id = models.AutoField(primary_key=True)
+    pos_id = models.ForeignKey(POS, on_delete=models.CASCADE, related_name='dispatch_details')
+    logistics_company = models.CharField(max_length=100, default='')
+    logistics_charges = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    added_by = models.ForeignKey(Employees, on_delete=models.DO_NOTHING, null=True, blank=True, related_name='+')
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        db_table = 'pos_dispatch'
 
 
 class POSItem(models.Model):

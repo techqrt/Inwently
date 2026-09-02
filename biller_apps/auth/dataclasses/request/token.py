@@ -9,3 +9,4 @@ class TokenPayload:
     expiry: str
     user_specific_data: UserSpecificData
     permissions: Permissions
+    role: str = 'EMPLOYEE'

@@ -7,12 +7,35 @@ from biller_apps.auth.dataclasses.request.user_specific import UserSpecificData
 from biller_apps.common.exceptions.token_errors import TokenErrors
 from biller_apps.employees.dataclasses.request.create import Permissions, PermissionsDashboard, PermissionsInventory, \
     PermissionsMaster, PermissionsReports, PrinterTemplatesPermission, SalesPermission, PurchasePermission, \
-    QuotationsPermission
+    QuotationsPermission, DispatchPermission
 from biller_apps.employees.models.employees import Employees
 from biller_apps.shops.models import Shops
 
 
 class AuthUtils:
+    ROLE_ADMIN = 'ADMIN'
+    ROLE_INVENTORY = 'INVENTORY'
+    ROLE_DISPATCH = 'DISPATCH'
+    ROLE_EMPLOYEE = 'EMPLOYEE'
+
+    @staticmethod
+    def resolve_role(permissions: Permissions) -> str:
+        """
+        Single-label role derived from the same permission flags used to gate
+        PI-workflow endpoints (see require_pos_permission in pos/views.py).
+        billing.pos is reused as "admin / full POS access", consistent with how
+        Admin is defined everywhere else in this codebase — broad permission
+        flags, not a separate role field. Checked in this order: an employee
+        with both inventory and dispatch flags true would be unusual, but ADMIN
+        takes priority over both, and INVENTORY takes priority over DISPATCH.
+        """
+        if permissions.billing.pos:
+            return AuthUtils.ROLE_ADMIN
+        if permissions.inventory.inventory:
+            return AuthUtils.ROLE_INVENTORY
+        if permissions.dispatch.dispatch:
+            return AuthUtils.ROLE_DISPATCH
+        return AuthUtils.ROLE_EMPLOYEE
 
     @staticmethod
     def get_shop_list_for_user(shop_ids:list):
@@ -66,7 +89,8 @@ class AuthUtils:
                 administration=user_data['reports_permission__administration'],
                 day_book=user_data['reports_permission__day_book'],
                 gst=user_data['reports_permission__gst']
-            )
+            ),
+            dispatch=DispatchPermission(dispatch=user_data['dispatch_permission__dispatch'])
         )
 
     @staticmethod

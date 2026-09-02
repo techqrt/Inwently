@@ -40,12 +40,14 @@ class InventoryLog(models.Model):
     EVENT_BULK_CREATE = "BULK_CREATE"
     EVENT_BULK_UPDATE = "BULK_UPDATE"
     EVENT_SALE_DEDUCT = "SALE_DEDUCT"
+    EVENT_SALE_REVERSAL = "SALE_REVERSAL"
     EVENT_CHOICES = [
         (EVENT_CREATE, "Create"),
         (EVENT_UPDATE, "Update"),
         (EVENT_BULK_CREATE, "Bulk Create"),
         (EVENT_BULK_UPDATE, "Bulk Update"),
         (EVENT_SALE_DEDUCT, "Sale Deduct"),
+        (EVENT_SALE_REVERSAL, "Sale Reversal"),
     ]
 
     STATUS_SUCCESS = "SUCCESS"

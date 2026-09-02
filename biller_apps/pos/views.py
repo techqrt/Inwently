@@ -5,6 +5,7 @@ from rest_framework import status
 from rest_framework.response import Response
 
 from biller.constants import Constants
+from biller_apps.auth.utils import AuthUtils
 from biller_apps.common.common import Common
 from biller_apps.common.publish import Publish
 from biller_apps.common.utils import Utils
@@ -12,10 +13,43 @@ from biller_apps.organisation.models import Organisation
 from biller_apps.pos.dataclasses.request.create import POSCreate
 from biller_apps.pos.dataclasses.request.update import POSUpdate
 from biller_apps.pos.dataclasses.request.status_change import POSStatusChange
+from biller_apps.pos.dataclasses.request.dispatch_details import POSDispatchDetails
 from biller_apps.pos.dataclasses.request.get import POSGet
 from biller_apps.pos.dataclasses.request.get_all import POSGetAll
 from biller_apps.pos.dataclasses.request.delete import POSDelete
 from biller_apps.pos.utils import POSUtils
+
+
+def require_pos_permission(*, inventory=False, dispatch=False):
+    """
+    Endpoint-level PI-workflow authorization gate.
+
+    The global auth middleware only enforces whole-permission-group checks keyed
+    off a URL-path keyword substring, and there's no keyword that can single out
+    "this one /pos/ action" without also blocking narrowly-scoped Inventory/Dispatch
+    employees from the endpoint that's actually theirs. So these specific actions
+    are gated explicitly here instead, following the same "check token_payload,
+    raise before running the body" shape as ApproverUtils.approver.
+
+    Checks the single `role` label embedded in the JWT at login (see
+    AuthUtils.resolve_role) rather than re-deriving it from the raw permission
+    booleans, so there's one source of truth for "which role is this token".
+    ADMIN is always allowed — Admin has full access per the approved workflow.
+    """
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            token_payload = kwargs['token_payload']
+            role = getattr(token_payload, 'role', AuthUtils.ROLE_EMPLOYEE)
+            allowed_roles = {AuthUtils.ROLE_ADMIN}
+            if inventory:
+                allowed_roles.add(AuthUtils.ROLE_INVENTORY)
+            if dispatch:
+                allowed_roles.add(AuthUtils.ROLE_DISPATCH)
+            if role not in allowed_roles:
+                raise ValueError(Constants.forbidden_access)
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator
 
 
 class POSView:
@@ -25,6 +59,9 @@ class POSView:
         self.data_sent = "POS sent to customer"
         self.data_confirmed = "POS confirmed"
         self.data_cancelled = "POS cancelled"
+        self.data_inventory_confirmed = "Inventory confirmed and stock deducted"
+        self.data_dispatch_details_added = "Dispatch details added"
+        self.data_dispatch_confirmed = "Dispatch confirmed"
         self.data_executed = "POS executed to invoice successfully"
         self.data_delete = "POS draft deleted successfully"
         self.data_get = "Data fetched successfully"
@@ -103,6 +140,7 @@ class POSView:
 
     @Common().exception_handler
     @Publish.status_update
+    @require_pos_permission()
     def confirm_extract(self, params: POSStatusChange, token_payload):
         organisation_id = self._resolve_organisation_id(token_payload.organisationName)
         #employee_id = self._resolve_billed_by(organisation_id, token_payload)
@@ -124,10 +162,70 @@ class POSView:
         ))
 
     # =========================================================
-    # EXECUTE — final invoice step (inventory check + deduct here only)
+    # INVENTORY CONFIRM — Inventory team confirms stock; this is what
+    # actually checks and deducts inventory now (see POSUtils.inventory_confirm)
     # =========================================================
     @Common().exception_handler
     @Publish.status_update
+    @require_pos_permission(inventory=True)
+    def inventory_confirm_extract(self, params: POSStatusChange, token_payload):
+        organisation_id = self._resolve_organisation_id(token_payload.organisationName)
+        employee_id = self._resolve_billed_by(organisation_id, token_payload)
+
+        pos = POSUtils.inventory_confirm(
+            pos_id=params.pos_id, organisation_id=organisation_id, confirmed_by_id=employee_id
+        )
+        return Response(status=status.HTTP_200_OK, data=Utils.success_response_data(
+            message=self.data_inventory_confirmed, data={'pos_id': pos.pos_id, 'status': pos.status}
+        ))
+
+    # =========================================================
+    # DISPATCH — Dispatch team adds logistics details, then confirms
+    # =========================================================
+    @Common().exception_handler
+    @Publish.status_update
+    @require_pos_permission(dispatch=True)
+    def dispatch_add_details_extract(self, params: POSDispatchDetails, token_payload):
+        organisation_id = self._resolve_organisation_id(token_payload.organisationName)
+        employee_id = self._resolve_billed_by(organisation_id, token_payload)
+
+        dispatch_details = POSUtils.dispatch_add_details(
+            pos_id=params.pos_id,
+            organisation_id=organisation_id,
+            logistics_company=params.logistics_company,
+            logistics_charges=params.logistics_charges,
+            added_by_id=employee_id,
+        )
+        return Response(status=status.HTTP_200_OK, data=Utils.success_response_data(
+            message=self.data_dispatch_details_added,
+            data={
+                'pos_id': params.pos_id,
+                'logistics_company': dispatch_details.logistics_company,
+                'logistics_charges': str(dispatch_details.logistics_charges),
+            }
+        ))
+
+    @Common().exception_handler
+    @Publish.status_update
+    @require_pos_permission(dispatch=True)
+    def dispatch_confirm_extract(self, params: POSStatusChange, token_payload):
+        organisation_id = self._resolve_organisation_id(token_payload.organisationName)
+        employee_id = self._resolve_billed_by(organisation_id, token_payload)
+
+        pos = POSUtils.dispatch_confirm(
+            pos_id=params.pos_id, organisation_id=organisation_id, confirmed_by_id=employee_id
+        )
+        return Response(status=status.HTTP_200_OK, data=Utils.success_response_data(
+            message=self.data_dispatch_confirmed, data={'pos_id': pos.pos_id, 'status': pos.status}
+        ))
+
+    # =========================================================
+    # EXECUTE — final invoice step (inventory already checked/deducted
+    # at inventory_confirm_extract; requires dispatch confirmation too)
+    # =========================================================
+    @Common().exception_handler
+    @Publish.status_update
+    @require_pos_permission()
     def execute_extract(self, params: POSStatusChange, token_payload):
         organisation_id = self._resolve_organisation_id(token_payload.organisationName)
         employee_id = self._resolve_billed_by(organisation_id, token_payload)

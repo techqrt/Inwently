@@ -10,7 +10,8 @@ from biller_apps.common.dataclasses.get_all import GetAll
 from biller_apps.common.models.adress import Address
 from biller_apps.employees.models.employee_credentials import EmployeeCredentials
 from biller_apps.employees.models.permission import SalesPermission, PrinterTemplatesPermission, ReportsPermission, \
-    PurchasePermission, DashboardPermission, InventoryPermission, MasterDataPermission, QuotationsPermission
+    PurchasePermission, DashboardPermission, InventoryPermission, MasterDataPermission, QuotationsPermission, \
+    DispatchPermission
 from biller_apps.organisation.models import Organisation
 
 
@@ -31,6 +32,7 @@ class Employees(models.Model):
     printer_templates_permission = models.ForeignKey(PrinterTemplatesPermission, on_delete=models.DO_NOTHING, null=True)
     purchase_permission = models.ForeignKey(PurchasePermission, on_delete=models.DO_NOTHING, null=True)
     reports_permission = models.ForeignKey(ReportsPermission, on_delete=models.DO_NOTHING, null=True)
+    dispatch_permission = models.ForeignKey(DispatchPermission, on_delete=models.DO_NOTHING, null=True)
     is_active = models.BooleanField(default=False)
     is_active_change_time = models.DateTimeField(default=timezone.now)
     access_token = models.TextField(default='')
@@ -53,6 +55,7 @@ class Employees(models.Model):
                dashboard_permission_id: int, master_data_permission_id: int,
                inventory_permission_id: int, sales_permission_id: int, quotations_permission_id: int,
                printer_templates_permission_id: int, purchase_permission_id: int, reports_permission_id: int,
+               dispatch_permission_id: int,
                is_active: bool = False, secure: bool = False, token_key: str = "", refresh_token: str = "", alternate_mobile_number: str=None) -> int:
         self.name = name
         self.mobile_number = mobile_number
@@ -78,6 +81,7 @@ class Employees(models.Model):
         self.printer_templates_permission = PrinterTemplatesPermission(printer_templates_permission_id)
         self.purchase_permission = PurchasePermission(purchase_permission_id)
         self.reports_permission = ReportsPermission(reports_permission_id)
+        self.dispatch_permission = DispatchPermission(dispatch_permission_id)
         self.save()
         self.employee_code = ''.join([i[0] for i in organisation_name.split()]) + '_' + str(self.employee_id)
         self.save()
@@ -119,7 +123,8 @@ class Employees(models.Model):
             Q(employee_code=employee_code) & Q(organisation_id__company_name=organisation_name)).values(
             'employee_id', 'address_id_id', 'dashboard_permission_id', 'inventory_permission_id',
             'master_data_permission_id', 'sales_permission_id', 'quotations_permission_id',
-            'printer_templates_permission_id', 'purchase_permission_id', 'reports_permission_id').first()
+            'printer_templates_permission_id', 'purchase_permission_id', 'reports_permission_id',
+            'dispatch_permission_id').first()
 
     @staticmethod
     def get(employee_code: str, organisation_name: str) -> dict:
@@ -134,7 +139,7 @@ class Employees(models.Model):
             'purchase_permission__purchase_list',
             'purchase_permission__return_purchase', 'purchase_permission__stock', 'purchase_permission__stock',
             'reports_permission__general', 'reports_permission__overview', 'reports_permission__administration',
-            'reports_permission__day_book', 'reports_permission__gst',
+            'reports_permission__day_book', 'reports_permission__gst', 'dispatch_permission__dispatch',
             'is_active', 'employee_credentials_id__email_id', 'email_verified', 'employee_code',
             'profile_photo_url').first()
 
@@ -163,7 +168,7 @@ class Employees(models.Model):
             'purchase_permission__purchase_list',
             'purchase_permission__return_purchase', 'purchase_permission__stock', 'purchase_permission__stock',
             'reports_permission__general', 'reports_permission__overview', 'reports_permission__administration',
-            'reports_permission__day_book', 'reports_permission__gst',
+            'reports_permission__day_book', 'reports_permission__gst', 'dispatch_permission__dispatch',
             'is_active', 'employee_credentials_id__email_id', 'email_verified', 'profile_photo_url',
             'organisation_id__company_name', 'employee_code').order_by(params.ordering)
 
@@ -191,7 +196,7 @@ class Employees(models.Model):
             'purchase_permission__purchase_list',
             'purchase_permission__return_purchase', 'purchase_permission__stock', 'purchase_permission__stock',
             'reports_permission__general', 'reports_permission__overview', 'reports_permission__administration',
-            'reports_permission__day_book', 'reports_permission__gst',
+            'reports_permission__day_book', 'reports_permission__gst', 'dispatch_permission__dispatch',
             'employee_credentials_id__email_id', 'shop_access', 'organisation_id__approval',
             'profile_photo_url').first()
 

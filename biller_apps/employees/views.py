@@ -26,7 +26,7 @@ from biller_apps.common.utils import Utils
 from biller_apps.employees.dataclasses.request.bulk_status_change import EmployeeBulkStatusChangeRequest
 from biller_apps.employees.dataclasses.request.create import Permissions, EmployeesRequest, PermissionsDashboard, \
     PermissionsInventory, PermissionsMaster, PermissionsReports, PrinterTemplatesPermission, SalesPermission, \
-    PurchasePermission, QuotationsPermission
+    PurchasePermission, QuotationsPermission, DispatchPermission
 from biller_apps.employees.dataclasses.request.delete import EmployeeDelete
 from biller_apps.employees.dataclasses.request.delete_many import EmployeeDeleteManyRequest
 from biller_apps.employees.dataclasses.request.get import EmployeeGet
@@ -35,7 +35,8 @@ from biller_apps.employees.es_query import EmployeeEsQuery
 from biller_apps.employees.models.employee_credentials import EmployeeCredentials
 from biller_apps.employees.models.employees import Employees
 from biller_apps.employees.models.permission import SalesPermission, PrinterTemplatesPermission, ReportsPermission, \
-    PurchasePermission, DashboardPermission, InventoryPermission, MasterDataPermission, QuotationsPermission
+    PurchasePermission, DashboardPermission, InventoryPermission, MasterDataPermission, QuotationsPermission, \
+    DispatchPermission
 from biller_apps.employees.serializers.response.get import EmployeesGetResponseSerializer
 from biller_apps.employees.serializers.response.get_all import EmployeesGetAllResponseSerializer
 from biller_apps.employees.utils import EmployeeUtils
@@ -106,6 +107,7 @@ class EmployeesView:
             stock_permissions = PurchasePermission(**permissions.stock)
             printer_templates_permissions = PrinterTemplatesPermission(**permissions.printer_templates)
             quotation_permissions = QuotationsPermission(**permissions.quotations)
+            dispatch_permissions = DispatchPermission(**permissions.dispatch)
 
             dashboard_permission_id = DashboardPermission().create(dashboard=dashboard_permissions.dashboard)
             master_data_permission_id = MasterDataPermission().create(
@@ -138,6 +140,7 @@ class EmployeesView:
             printer_templates_permission_id = PrinterTemplatesPermission().create(
                 printer_templates=printer_templates_permissions.printer_templates
             )
+            dispatch_permission_id = DispatchPermission().create(dispatch=dispatch_permissions.dispatch)
 
             credential_id = EmployeeCredentials().create(email_id=params.email_id, password=passw)
 
@@ -156,6 +159,7 @@ class EmployeesView:
                                purchase_permission_id=purchase_permission_id,
                                reports_permission_id=reports_permission_id,
                                printer_templates_permission_id=printer_templates_permission_id,
+                               dispatch_permission_id=dispatch_permission_id,
                                is_active=True)
 
         return Response(status=status.HTTP_201_CREATED, data=Utils.success_response_data(
@@ -204,6 +208,8 @@ class EmployeesView:
                                        administration=params.permissions.reports.administration,
                                        day_book=params.permissions.reports.day_book,
                                        gst=params.permissions.reports.gst)
+            DispatchPermission().update(permission_id=employees_data['dispatch_permission_id'],
+                                        dispatch=params.permissions.dispatch.dispatch)
 
             Employees().update(name=params.name, mobile_number=params.mobile_number,alternate_mobile_number=params.alternate_mobile_number, dob=params.dob,
                                shop_access=shop_access, employee_id=employees_data['employee_id'],
@@ -221,7 +227,8 @@ class EmployeesView:
                                                  token_payload.organisationName)).values(
             'address_id', 'employee_credentials_id', 'employee_id','dashboard_permission_id',
             'master_data_permission_id','inventory_permission_id','printer_templates_permission_id',
-            'purchase_permission_id','quotations_permission_id','reports_permission_id','sales_permission_id').first()
+            'purchase_permission_id','quotations_permission_id','reports_permission_id','sales_permission_id',
+            'dispatch_permission_id').first()
 
         if employees is None:
             raise ValueError(self.data_no_match)
@@ -236,6 +243,7 @@ class EmployeesView:
             PrinterTemplatesPermission.remove(permission_id=employees['printer_templates_permission_id'])
             PurchasePermission.remove(permission_id=employees['purchase_permission_id'])
             ReportsPermission.remove(permission_id=employees['reports_permission_id'])
+            DispatchPermission.remove(permission_id=employees['dispatch_permission_id'])
             EmployeeCredentials().remove(employee_credentials_id=employees['employee_credentials_id'])
             Employees().remove(employee_id=employees['employee_id'])
 
