@@ -87,6 +87,16 @@ class AuthenticationMiddleware:
         path = request.path.lower()
         permissions = payload['permissions']
 
+        # /pos/ endpoints authorize themselves explicitly (see require_pos_permission
+        # in pos/views.py, keyed off the resolved role) rather than through this
+        # blanket keyword match. Without this exclusion, a path like
+        # /pos/inventory-confirm or /pos/dispatch-confirm would also demand the
+        # *whole* inventory/dispatch permission group be true here — which wrongly
+        # blocks an Admin who is Admin via billing.pos but was never separately
+        # granted inventory/dispatch flags.
+        if path.startswith('/pos/'):
+            return True
+
         # Dictionary mapping URL paths to permissions fields
         permissions_mapping = {
             'master': permissions['master'],
@@ -96,7 +106,6 @@ class AuthenticationMiddleware:
             'dashboard': permissions['dashboard'],
             'stock': permissions['stock'],
             'quotations': permissions['stock'],
-            'dispatch': permissions['dispatch']
         }
 
         # Iterate over the dictionary to check if the user has the required permissions
