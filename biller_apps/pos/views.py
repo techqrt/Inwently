@@ -253,7 +253,7 @@ class POSView:
     def get_extract(self, params: POSGet, token_payload):
         organisation_id = self._resolve_organisation_id(token_payload.organisationName)
 
-        pos, items = POSUtils.get(
+        pos, items, dispatch_details = POSUtils.get(
             organisation_id=organisation_id,
             pos_id=params.pos_id,
             pos_code=params.pos_code,
@@ -271,6 +271,10 @@ class POSView:
             'amount': str(pos.amount),
             'customer_quotation_id': pos.customer_quotation_id,
             'items': items,
+            'dispatch': {
+                'logistics_company': dispatch_details.logistics_company,
+                'logistics_charges': str(dispatch_details.logistics_charges),
+            } if dispatch_details else None,
         }
 
         return Response(status=status.HTTP_200_OK, data=Utils.success_response_data(

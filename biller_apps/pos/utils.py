@@ -449,7 +449,8 @@ class POSUtils:
             "pos_item_id", "item_id__item_code", "item_id__name",
             "quantity", "price", "tax", "discount", "total",
         ))
-        return pos, items
+        dispatch_details = POSDispatch.objects.filter(pos_id=pos).first()
+        return pos, items, dispatch_details
 
     @staticmethod
     def get_all(organisation_id, status=None, ordering="-created_date"):
