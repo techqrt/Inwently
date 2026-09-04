@@ -404,6 +404,9 @@ class POSUtils:
         if not pos_items:
             raise ValueError("Cannot execute an empty POS.")
 
+        dispatch_details = POSDispatch.objects.filter(pos_id=pos).first()
+        logistics_charges = dispatch_details.logistics_charges if dispatch_details else 0
+
         customer_bills = CustomerBills.objects.create(
             organisation_id_id=organisation_id,
             shop_id=pos.shop_id,
@@ -411,6 +414,7 @@ class POSUtils:
             discounts=pos.discounts,
             discounts_unit=pos.discounts_unit,
             wave_off=pos.wave_off,
+            logistics_charges=logistics_charges,
             pos_id=pos.pos_id,
         )
         customer_bills.bill_number = (
@@ -428,7 +432,7 @@ class POSUtils:
 
         pos.status = POS.STATUS_EXECUTED
         pos.save(update_fields=["status"])
-        customer_bills.amount = pos.amount
+        customer_bills.amount = pos.amount + logistics_charges
         return customer_bills
 
     # =========================================================

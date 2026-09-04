@@ -87,7 +87,7 @@ class BillingView:
             organisation_id__company_name=token_payload.organisationName
         ).order_by('-created_at').values(
             'customer_bills_id', 'bill_number', 'created_at', 'discounts', 'discounts_unit', 'wave_off',
-            'pos_id', 'shop_id__shop_code',
+            'logistics_charges', 'pos_id', 'shop_id__shop_code',
         )
 
         pages = Paginator(queryset, params.limit)
@@ -118,13 +118,15 @@ class BillingView:
                 discount_amount = subtotal * (discounts / Decimal('100'))
             else:
                 discount_amount = discounts
-            total_price = subtotal - discount_amount - wave_off
+            logistics_charges = Decimal(str(bill['logistics_charges']))
+            total_price = subtotal - discount_amount - wave_off + logistics_charges
 
             pos_info = pos_lookup.get(bill['pos_id'], {})
             result.append({
                 'createdAt': bill['created_at'].strftime('%Y-%m-%d %H:%M:%S'),
                 'billNumber': bill['bill_number'],
                 'totalPrice': float(total_price.quantize(Decimal('0.01'))),
+                'logisticsCharges': float(logistics_charges.quantize(Decimal('0.01'))),
                 'customerName': pos_info.get('customer__name'),
                 'shopCode': bill['shop_id__shop_code'],
                 'posCode': pos_info.get('pos_code'),
@@ -146,7 +148,7 @@ class BillingView:
             organisation_id__company_name=token_payload.organisationName, bill_number=params.bill_number
         ).values(
             'customer_bills_id', 'bill_number', 'created_at', 'discounts', 'discounts_unit', 'wave_off',
-            'billed_by__employee_code', 'shop_id__shop_code',
+            'logistics_charges', 'billed_by__employee_code', 'shop_id__shop_code',
         ).first()
         if not customer_bills:
             raise ValueError(self.data_no_match)
@@ -163,7 +165,8 @@ class BillingView:
             discount_amount = subtotal * (discounts / Decimal('100'))
         else:
             discount_amount = discounts
-        amount = subtotal - discount_amount - wave_off
+        logistics_charges = Decimal(str(customer_bills['logistics_charges']))
+        amount = subtotal - discount_amount - wave_off + logistics_charges
 
         data = {
             'customer_bills_id': customer_bills['customer_bills_id'],
@@ -173,6 +176,7 @@ class BillingView:
             'discounts': str(discounts),
             'discounts_unit': customer_bills['discounts_unit'],
             'wave_off': str(wave_off),
+            'logistics_charges': str(logistics_charges.quantize(Decimal('0.01'))),
             'amount': str(amount.quantize(Decimal('0.01'))),
             'created_at': customer_bills['created_at'].strftime('%Y-%m-%d %H:%M:%S'),
             'items': [

@@ -20,6 +20,7 @@ class CustomerBills(models.Model):
     discounts = models.FloatField(default=0)
     discounts_unit = models.CharField(max_length=20, default='percentage')
     wave_off = models.FloatField(default=0)
+    logistics_charges = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
     class Meta:
         db_table = 'customer_bills'
