@@ -1,9 +1,6 @@
 import json
 
-import pandas
 from django.core.paginator import Paginator
-from django.db import transaction
-from django.utils import timezone
 from rest_framework import status
 from rest_framework.response import Response
 
@@ -21,7 +18,6 @@ from biller_apps.common.dataclasses.get_all import GetAll
 from biller_apps.common.publish import Publish
 from biller_apps.common.utils import Utils
 from biller_apps.employees.models.employees import Employees
-from biller_apps.item.models.items import Items
 from biller_apps.shops.models import Shops
 
 
@@ -38,22 +34,12 @@ class BillingView:
 
         super().__init__()
 
-    def create_prepare_data(self, params: BillingRequest, organisation_name: str) -> pandas.DataFrame:
-        dataframe = pandas.DataFrame.from_records(params.items)
-        dataframe.dropna(inplace=True)
-        if dataframe.shape[0] == 0:
-            raise ValueError(self.item_list_empty)
-        items = Items.get_with_item_list(organisation_name=organisation_name,
-                                         item_code_list=list(dataframe['item_code'].unique()))
-        items_dataframe = pandas.DataFrame.from_records(items)
-        dataframe = pandas.merge(left=dataframe, right=items_dataframe, how='left', left_on='item_code',
-                                 right_on='item_code')
-        dataframe['created_at'] = timezone.now()
-        return dataframe
-
     def create_validator(self, params: BillingRequest, token_payload: Payload) -> ValueError | tuple:
-        employee = Employees.get_by_email(email=params.billed_by,
-                                          organisation_name=token_payload.organisationName)
+        # params.billed_by carries the employee_code (see BillingRequestSerializer),
+        # not an email — resolve it the same way.
+        employee = Employees.objects.filter(
+            employee_code=params.billed_by, organisation_id__company_name=token_payload.organisationName
+        ).values('employee_id', 'organisation_id_id').first()
         if employee is None:
             raise ValueError(self.data_no_match_employee)
         shop = Shops.objects.filter(shop_code=params.shop_code).values('shop_id').first()
@@ -66,15 +52,21 @@ class BillingView:
     @Publish.status_update
     def create_extract(self, params: BillingRequest, token_payload: Payload) -> Response:
         employee, shop = self.create_validator(params=params, token_payload=token_payload)
-        dataframe = self.create_prepare_data(params=params, organisation_name=token_payload.organisationName)
-        with transaction.atomic():
-            for index, value in dataframe.iterrows():
-                Billing().create(created_at=value['created_at'],
-                                 employee_id=employee['employee_id'], item_id=value['item_id'],
-                                 organisation_id=employee['organisation_id_id'], shop_id=shop['shop_id'],
-                                 quantity=value['quantity'], mrp_price=0.0)
 
-        return Response(status=status.HTTP_201_CREATED, data=Utils.success_response_data(message=self.data_created))
+        customer_bills = BillingUtils.create_direct(
+            customer_name=params.customer_name,
+            customer_phone=params.customer_phone,
+            shop_code=params.shop_code,
+            organisation_id=employee['organisation_id_id'],
+            organisation_name=token_payload.organisationName,
+            items=params.items,
+            billed_by_id=employee['employee_id'],
+        )
+
+        return Response(status=status.HTTP_201_CREATED, data=Utils.success_response_data(
+            message=self.data_created,
+            data={'customer_bills_id': customer_bills.customer_bills_id, 'bill_number': customer_bills.bill_number}
+        ))
 
     @Common().exception_handler
     def get_all_extract(self, params: GetAll, token_payload: Payload) -> Response:
@@ -87,7 +79,7 @@ class BillingView:
             organisation_id__company_name=token_payload.organisationName
         ).order_by('-created_at').values(
             'customer_bills_id', 'bill_number', 'created_at', 'discounts', 'discounts_unit', 'wave_off',
-            'logistics_charges', 'pos_id', 'shop_id__shop_code',
+            'logistics_charges', 'pos_id', 'shop_id__shop_code', 'customer_name',
         )
 
         pages = Paginator(queryset, params.limit)
@@ -127,7 +119,7 @@ class BillingView:
                 'billNumber': bill['bill_number'],
                 'totalPrice': float(total_price.quantize(Decimal('0.01'))),
                 'logisticsCharges': float(logistics_charges.quantize(Decimal('0.01'))),
-                'customerName': pos_info.get('customer__name'),
+                'customerName': pos_info.get('customer__name') or bill['customer_name'],
                 'shopCode': bill['shop_id__shop_code'],
                 'posCode': pos_info.get('pos_code'),
             })
@@ -149,6 +141,7 @@ class BillingView:
         ).values(
             'customer_bills_id', 'bill_number', 'created_at', 'discounts', 'discounts_unit', 'wave_off',
             'logistics_charges', 'billed_by__employee_code', 'shop_id__shop_code',
+            'customer_name', 'customer_phone', 'pos_id',
         ).first()
         if not customer_bills:
             raise ValueError(self.data_no_match)
@@ -173,6 +166,8 @@ class BillingView:
             'bill_number': customer_bills['bill_number'],
             'shop_code': customer_bills['shop_id__shop_code'],
             'billed_by': customer_bills['billed_by__employee_code'],
+            'customer_name': customer_bills['customer_name'],
+            'customer_phone': customer_bills['customer_phone'],
             'discounts': str(discounts),
             'discounts_unit': customer_bills['discounts_unit'],
             'wave_off': str(wave_off),

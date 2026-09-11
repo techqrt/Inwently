@@ -12,6 +12,10 @@ class CustomerBills(models.Model):
     customer_bills_id = models.AutoField(primary_key=True)
     # CustomerBills — add traceability field
     pos_id = models.IntegerField(null=True, blank=True, default=None)
+    # Set only for invoices created directly (no PI) — customer for a PI-based
+    # invoice is still reached via POS.customer, this is not a replacement for that.
+    customer_name = models.CharField(max_length=120, null=True, blank=True, default=None)
+    customer_phone = models.CharField(max_length=20, null=True, blank=True, default=None)
     bill_number = models.CharField(max_length=100, default='')
     created_at = models.DateTimeField(default=timezone.now)
     organisation_id = models.ForeignKey(Organisation, on_delete=models.CASCADE)
