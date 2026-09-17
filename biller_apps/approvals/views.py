@@ -24,7 +24,9 @@ class ApproverViews:
 
     @Common().exception_handler
     def get_all_unapproved_extract(self, params: ApprovalsGetAllRequest, token_payload: Payload):
-        pages = Paginator(Approvals.get_all_unapproved(organisation_name=token_payload.organisationName), params.limit)
+        pages = Paginator(Approvals.get_all_unapproved(organisation_name=token_payload.organisationName,
+                                                       filter_key=params.filter_key,
+                                                       filter_value=params.filter_value), params.limit)
         if pages.num_pages < params.page_num:
             raise ValueError(Constants.page_num_exceeded)
         data = pages.page(params.page_num)

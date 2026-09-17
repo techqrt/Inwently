@@ -104,6 +104,7 @@ class CustomerQuotationView:
         organisation_id = self._resolve_organisation_id(token_payload.organisationName)
         quotations = CustomerQuotationUtils.get_all(
             organisation_id=organisation_id, status=params.status, ordering=params.ordering,
+            filter_key=params.filter_key, filter_value=params.filter_value,
         )
         pages = Paginator(quotations, params.limit)
         if pages.num_pages < params.page_num:

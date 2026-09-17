@@ -11,6 +11,8 @@ class CustomerQuotationGetAll:
     status: Optional[str] = None
     sort_by: str = "created_at"
     sort_order: str = "desc"
+    filter_key: str = ""
+    filter_value: str = ""
     values_list: list = field(default_factory=list)
 
     @property

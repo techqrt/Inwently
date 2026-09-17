@@ -19,6 +19,8 @@ class POSGetAllSerializer(serializers.Serializer):
     )
     sort_by = serializers.ChoiceField(choices=["created_date", "amount"], default="created_date")
     sort_order = serializers.ChoiceField(choices=["asc", "desc"], default="desc")
+    filter_key = serializers.CharField(max_length=100, required=False, default='')
+    filter_value = serializers.CharField(max_length=100, required=False, default='')
 
     def create(self, validated_data) -> POSGetAll:
         return POSGetAll(**validated_data)
@@ -32,4 +34,6 @@ class POSGetAllSerializer(serializers.Serializer):
                               description="Filter by status: draft, sent_to_customer, confirmed, cancelled, executed."),
             OpenApiParameter(name="sort_by", type=str, location=OpenApiParameter.QUERY, required=False, description="created_date or amount."),
             OpenApiParameter(name="sort_order", type=str, location=OpenApiParameter.QUERY, required=False, description="asc or desc."),
+            OpenApiParameter(name="filter_key", type=str, location=OpenApiParameter.QUERY, required=False, description="Field to filter data"),
+            OpenApiParameter(name="filter_value", type=str, location=OpenApiParameter.QUERY, required=False, description="Value for selected filter field"),
         ]

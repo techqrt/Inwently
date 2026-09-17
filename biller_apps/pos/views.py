@@ -292,6 +292,8 @@ class POSView:
             organisation_id=organisation_id,
             status=params.status,
             ordering=params.ordering,
+            filter_key=params.filter_key,
+            filter_value=params.filter_value,
         )
 
         pages = Paginator(pos_list, params.limit)

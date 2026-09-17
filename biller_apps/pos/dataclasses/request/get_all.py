@@ -11,6 +11,8 @@ class POSGetAll:
     status: Optional[str] = None
     sort_by: str = "created_date"
     sort_order: str = "desc"
+    filter_key: str = ""
+    filter_value: str = ""
     values_list: list = field(default_factory=list)
 
     @property

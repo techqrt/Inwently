@@ -1,6 +1,7 @@
 import datetime
 
 from django.db import models
+from django.db.models import Q
 
 from biller_apps.employees.models.employees import Employees
 from biller_apps.organisation.models import Organisation
@@ -37,8 +38,11 @@ class Approvals(models.Model):
         return self.approval_code
 
     @staticmethod
-    def get_all_unapproved(organisation_name: str) -> list:
-        return Approvals.objects.filter(organisation_id__company_name=organisation_name, approved_time__isnull=True).values(
+    def get_all_unapproved(organisation_name: str, filter_key: str = None, filter_value: str = None) -> list:
+        filters = Q(organisation_id__company_name=organisation_name, approved_time__isnull=True)
+        if filter_key and filter_value:
+            filters = filters & Q(**{filter_key: filter_value})
+        return Approvals.objects.filter(filters).values(
             'request_from', 'request_method', 'payload', 'approval_code').order_by('approval_code')
 
     @staticmethod

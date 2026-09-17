@@ -128,10 +128,12 @@ class CustomerQuotationUtils:
         return quotation, items
 
     @staticmethod
-    def get_all(organisation_id, status=None, ordering="-created_at"):
+    def get_all(organisation_id, status=None, ordering="-created_at", filter_key=None, filter_value=None):
         queryset = CustomerQuotation.objects.filter(organisation_id_id=organisation_id)
         if status:
             queryset = queryset.filter(status=status)
+        if filter_key and filter_value:
+            queryset = queryset.filter(**{filter_key: filter_value})
         queryset = queryset.order_by(ordering)
         return queryset.values(
             "customer_quotation_id", "customer_quotation_code", "customer_name",

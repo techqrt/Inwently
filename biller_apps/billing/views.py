@@ -77,7 +77,11 @@ class BillingView:
 
         queryset = CustomerBills.objects.filter(
             organisation_id__company_name=token_payload.organisationName
-        ).order_by('-created_at').values(
+        )
+        if params.filter_key and params.filter_value:
+            queryset = queryset.filter(**{params.filter_key: params.filter_value})
+
+        queryset = queryset.order_by('-created_at').values(
             'customer_bills_id', 'bill_number', 'created_at', 'discounts', 'discounts_unit', 'wave_off',
             'logistics_charges', 'pos_id', 'shop_id__shop_code', 'customer_name',
         )

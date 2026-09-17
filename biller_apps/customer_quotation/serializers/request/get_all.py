@@ -12,6 +12,8 @@ class CustomerQuotationGetAllSerializer(serializers.Serializer):
     )
     sort_by = serializers.ChoiceField(choices=["created_at", "status"], default="created_at")
     sort_order = serializers.ChoiceField(choices=["asc", "desc"], default="desc")
+    filter_key = serializers.CharField(max_length=100, required=False, default='')
+    filter_value = serializers.CharField(max_length=100, required=False, default='')
 
     def create(self, validated_data) -> CustomerQuotationGetAll:
         return CustomerQuotationGetAll(**validated_data)

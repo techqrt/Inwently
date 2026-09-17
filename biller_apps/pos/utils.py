@@ -457,10 +457,12 @@ class POSUtils:
         return pos, items, dispatch_details
 
     @staticmethod
-    def get_all(organisation_id, status=None, ordering="-created_date"):
+    def get_all(organisation_id, status=None, ordering="-created_date", filter_key=None, filter_value=None):
         queryset = POS.objects.filter(organisation_id_id=organisation_id)
         if status:
             queryset = queryset.filter(status=status)
+        if filter_key and filter_value:
+            queryset = queryset.filter(**{filter_key: filter_value})
         queryset = queryset.order_by(ordering)
         return queryset.values(
             "pos_id", "pos_code", "customer__name", "shop_id__shop_code",
