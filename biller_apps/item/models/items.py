@@ -152,6 +152,17 @@ class Items(models.Model):
         if params.filter_key and params.filter_value:
             if params.filter_key.lower() == 'is_active':
                 filters = filters & Q(is_active=params.filter_value.lower() == 'true')
+            elif params.filter_key.lower() == 'shop_code':
+                # Items aren't shop-scoped themselves — shop association only exists via
+                # Inventory (item present in a shop's stock). Resolve to the distinct set
+                # of item ids with inventory in that shop first, rather than filtering
+                # through the reverse `inventory` relation directly, which would fan out
+                # into duplicate item rows when an item has multiple inventory batches
+                # in the same shop.
+                from biller_apps.inventory.models import Inventory
+                item_ids = Inventory.objects.filter(
+                    shop_id__shop_code=params.filter_value).values_list('item_id', flat=True).distinct()
+                filters = filters & Q(item_id__in=item_ids)
             else:
                 filters = filters & Q(**{params.filter_key: params.filter_value})
 
