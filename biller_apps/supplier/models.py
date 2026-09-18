@@ -97,6 +97,18 @@ class Supplier(models.Model):
         if params.filter_key and params.filter_value:
             if params.filter_key.lower() == 'is_active':
                 filters &= Q(is_active=params.filter_value.lower() == 'true'        )
+            elif params.filter_key.lower() == 'shop_code':
+                # Supplier has no direct shop relation — a supplier is tied to a shop only
+                # through BranchSplit (how a purchase's quantity was allocated across shop
+                # branches: Supplier -> PurchaseBills -> Purchase -> BranchSplit -> Shops).
+                # Resolve to the distinct set of matching supplier ids first, rather than
+                # traversing the reverse relation directly, to avoid duplicate supplier rows
+                # when a supplier has multiple purchases/splits into the same shop.
+                from biller_apps.purchase.models.branch_split import BranchSplit
+                supplier_ids = BranchSplit.objects.filter(
+                    shop__shop_code=params.filter_value
+                ).values_list('purchase__purchase_bill__supplier_id', flat=True).distinct()
+                filters &= Q(supplier_id__in=supplier_ids)
             else:
                 filters &= Q(**{params.filter_key: params.filter_value})
         if len(params.search_key) > 0:
