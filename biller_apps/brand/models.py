@@ -43,6 +43,17 @@ class Brand(models.Model):
         if params.filter_key and params.filter_value:
             if params.filter_key.lower()== 'is_active':
                 filters = filters & Q(is_active=params.filter_value.lower() == 'true')
+            elif params.filter_key.lower() == 'shop_code':
+                # Brand has no direct shop relation — a brand is tied to a shop only through
+                # its items' inventory (Brand -> Items -> Inventory -> Shops). Resolve to the
+                # distinct set of matching brand ids first, rather than traversing the reverse
+                # relations directly, to avoid duplicate brand rows when a brand has multiple
+                # items/inventory batches in the same shop.
+                from biller_apps.inventory.models import Inventory
+                brand_ids = Inventory.objects.filter(
+                    shop_id__shop_code=params.filter_value
+                ).values_list('item_id__brand_id', flat=True).distinct()
+                filters = filters & Q(brand_id__in=brand_ids)
             else:
                 filters=filters & Q(**{params.filter_key:params.filter_value})
         

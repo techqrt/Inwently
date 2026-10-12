@@ -150,6 +150,20 @@ class Employees(models.Model):
         if params.filter_key and params.filter_value:
             if params.filter_key == 'is_active':
                 filters = filters & Q(**{params.filter_key: params.filter_value.lower() == 'true'})
+            elif params.filter_key.lower() == 'shop_code':
+                # shop_access is a plain JSONField list of shop ids (not a real relation), and
+                # the `contains` JSON lookup Django would need for this isn't supported on
+                # every backend (e.g. sqlite) — so resolve the matching employee ids in Python
+                # instead of relying on a backend-specific JSON query.
+                from biller_apps.shops.models import Shops
+                shop = Shops.objects.filter(shop_code=params.filter_value).values('shop_id').first()
+                shop_id = shop['shop_id'] if shop else None
+                employee_ids = [
+                    row['employee_id'] for row in Employees.objects.filter(
+                        organisation_id__company_name=organisation_name).values('employee_id', 'shop_access')
+                    if shop_id is not None and shop_id in (row['shop_access'] or [])
+                ]
+                filters = filters & Q(employee_id__in=employee_ids)
             else:
                 filters = filters & Q(**{params.filter_key: params.filter_value})
 
