@@ -82,6 +82,17 @@ class Customer(models.Model):
         if params.filter_key and params.filter_value:
             if params.filter_key.lower()=='is_active':
                 filters=filters & Q(is_active=params.filter_value.lower()=='true')
+            elif params.filter_key.lower() == 'shop_code':
+                # Customer has no direct shop relation — a customer is tied to a shop only
+                # through the POS records placed at that shop (Customer -> POS -> Shops).
+                # Resolve to the distinct set of matching customer ids first, rather than
+                # traversing the reverse relation directly, to avoid duplicate customer rows
+                # when a customer has multiple POS orders at the same shop.
+                from biller_apps.pos.models import POS
+                customer_ids = POS.objects.filter(
+                    shop_id__shop_code=params.filter_value
+                ).values_list('customer_id', flat=True).distinct()
+                filters = filters & Q(customer_id__in=customer_ids)
             else:
                 filters=filters & Q(**{params.filter_key:params.filter_value})
                 
