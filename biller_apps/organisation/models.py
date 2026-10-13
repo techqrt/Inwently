@@ -98,6 +98,11 @@ class Organisation(models.Model):
                    approval=params.filter_value.lower() == 'true'
             )
 
+            elif params.filter_key.lower() == 'shop_code':
+                # Organisation has a direct reverse relation to Shops already (no import
+                # needed, unlike brand/category/taxes which need the Inventory detour).
+                filters &= Q(shops__shop_code=params.filter_value)
+
             else:
                filters &= Q(
                  **{params.filter_key: params.filter_value}

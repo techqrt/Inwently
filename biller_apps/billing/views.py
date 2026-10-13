@@ -79,7 +79,10 @@ class BillingView:
             organisation_id__company_name=token_payload.organisationName
         )
         if params.filter_key and params.filter_value:
-            queryset = queryset.filter(**{params.filter_key: params.filter_value})
+            if params.filter_key.lower() == 'shop_code':
+                queryset = queryset.filter(shop_id__shop_code=params.filter_value)
+            else:
+                queryset = queryset.filter(**{params.filter_key: params.filter_value})
 
         queryset = queryset.order_by('-created_at').values(
             'customer_bills_id', 'bill_number', 'created_at', 'discounts', 'discounts_unit', 'wave_off',

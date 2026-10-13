@@ -133,7 +133,12 @@ class CustomerQuotationUtils:
         if status:
             queryset = queryset.filter(status=status)
         if filter_key and filter_value:
-            queryset = queryset.filter(**{filter_key: filter_value})
+            if filter_key.lower() == 'shop_code':
+                # shop_id is a direct FK here, but the raw field name isn't "shop_code" —
+                # map the same way the other get_all endpoints' shop_code special case does.
+                queryset = queryset.filter(shop_id__shop_code=filter_value)
+            else:
+                queryset = queryset.filter(**{filter_key: filter_value})
         queryset = queryset.order_by(ordering)
         return queryset.values(
             "customer_quotation_id", "customer_quotation_code", "customer_name",

@@ -41,6 +41,14 @@ class Taxes(models.Model):
         if params.filter_key and params.filter_value:
             if params.filter_key.lower() == 'is_active':
                 filters &= Q(is_active=params.filter_value.lower() == 'true')
+            elif params.filter_key.lower() == 'shop_code':
+                # Taxes has no direct shop relation — resolved via Taxes -> Items -> Inventory
+                # -> Shops, same as the brand_get_all shop_code fix.
+                from biller_apps.inventory.models import Inventory
+                tax_ids = Inventory.objects.filter(
+                    shop_id__shop_code=params.filter_value
+                ).values_list('item_id__tax_code', flat=True).distinct()
+                filters &= Q(tax_id__in=tax_ids)
             else:
                 filters &= Q(**{params.filter_key:params.filter_value})
         if len(params.search_key)>0:

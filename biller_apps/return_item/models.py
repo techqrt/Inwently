@@ -59,6 +59,11 @@ class ReturnItem(models.Model):
         if params.filter_key and params.filter_value:
             if params.filter_key.lower() == 'is_active':
                 filters &= Q(is_active=params.filter_value.lower() == 'true')
+            elif params.filter_key.lower() == 'shop_code':
+                # Same bill -> customer_billing_id chain already used two lines below for
+                # 'bill__customer_billing_id__bill_number' — a return is tied to the shop its
+                # originating bill was issued at (ReturnItem -> Billing -> CustomerBills -> Shops).
+                filters &= Q(bill__customer_billing_id__shop_id__shop_code=params.filter_value)
             else:
                 filters &= Q(**{params.filter_key: params.filter_value})
         if len(params.search_key) > 0:
