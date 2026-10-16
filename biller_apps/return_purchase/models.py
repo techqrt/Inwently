@@ -58,6 +58,16 @@ class ReturnPurchase(models.Model):
         if params.filter_key and params.filter_value:
             if params.filter_key.lower() == 'is_active':
                 filters &= Q(is_active=params.filter_value.lower() == 'true')
+            elif params.filter_key.lower() == 'shop_code':
+                # ReturnPurchase.purchase points to PurchaseBills, not Purchase itself — reach
+                # the shop via the same BranchSplit relation used by purchase_get_all's own
+                # shop_code fix: PurchaseBills <- Purchase <- BranchSplit -> Shops. Resolve to
+                # distinct purchase_bill ids first to avoid duplicate rows.
+                from biller_apps.purchase.models.branch_split import BranchSplit
+                purchase_bill_ids = BranchSplit.objects.filter(
+                    shop__shop_code=params.filter_value
+                ).values_list('purchase__purchase_bill_id', flat=True).distinct()
+                filters &= Q(purchase_id__in=purchase_bill_ids)
             else:
                 filters &= Q(**{params.filter_key: params.filter_value})
         if len(params.search_key) > 0:

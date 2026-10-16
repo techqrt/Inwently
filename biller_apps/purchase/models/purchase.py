@@ -57,6 +57,16 @@ class Purchase(models.Model):
         if params.filter_value and params.filter_key:
             if params.filter_key.lower() == 'is_active':
                 filters &= Q(is_active=params.filter_value.lower() == 'true')
+            elif params.filter_key.lower() == 'shop_code':
+                # Purchase has a direct reverse relation to BranchSplit already (how this
+                # purchase's quantity was allocated across shop branches) — resolve to the
+                # distinct set of matching purchase ids first to avoid duplicate purchase
+                # rows when a purchase has multiple splits into the same shop.
+                from biller_apps.purchase.models.branch_split import BranchSplit
+                purchase_ids = BranchSplit.objects.filter(
+                    shop__shop_code=params.filter_value
+                ).values_list('purchase_id', flat=True).distinct()
+                filters &= Q(purchase_id__in=purchase_ids)
             else:
                 filters &= Q(**{params.filter_key: params.filter_value})
 

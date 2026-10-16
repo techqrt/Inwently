@@ -65,7 +65,10 @@ class PurchaseView:
             params.sort_by = "purchase_bill_number"
             params.sort_order = 'asc'
             params.ordering = f"{'-' if params.sort_order == 'desc' else ''}{params.sort_by}"
-        if params.filter_key and params.filter_value:
+        if params.filter_key and params.filter_value and params.filter_key.lower() != 'shop_code':
+            # shop_code is already fully resolved inside Purchase.get_all() above (it maps to
+            # a branchsplit lookup, not a literal field) — re-applying it here as a raw
+            # dynamic filter would just throw the same "cannot resolve keyword" error.
             filter_value = params.filter_value
             if params.filter_key == 'is_active':
                 filter_value = params.filter_value.lower() == 'true'
